@@ -1,0 +1,79 @@
+# Instructions
+
+During your interaction with the user, if you find anything reusable in this project (e.g. version of a library, model name), especially about a fix to a mistake you made or a correction you received, you should take note in the `Lessons` section in the `.cursorrules` file so you will not make the same mistake again. 
+
+You should also use the `.cursorrules` file as a Scratchpad to organize your thoughts. Especially when you receive a new task, you should first review the content of the Scratchpad, clear old different task if necessary, first explain the task, and plan the steps you need to take to complete the task. You can use todo markers to indicate the progress, e.g.
+[X] Task 1
+[ ] Task 2
+
+Also update the progress of the task in the Scratchpad when you finish a subtask.
+Especially when you finished a milestone, it will help to improve your depth of task accomplishment to use the Scratchpad to reflect and plan.
+The goal is to help you maintain a big picture as well as the progress of the task. Always refer to the Scratchpad when you plan the next step.
+
+
+# Lessons
+
+## User Specified Lessons
+
+- You have a python venv in ./venv. Use it.
+- Include info useful for debugging in the program output.
+- Read the file before you try to edit it.
+- Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. 
+- When integrating Logfire with httpx, you need to install the additional package `logfire[httpx]` to enable HTTP request monitoring.
+- Always call `logfire.configure()` before using any other Logfire functions.
+- Use `logfire.span()` for tracking longer operations and `logfire.info()`, `logfire.error()` for specific events.
+- Remember to add proper cleanup with `logfire.force_flush()` and `logfire.shutdown()` to ensure all logs are sent.
+
+## Cursor learned
+
+- For search results, ensure proper handling of different character encodings (UTF-8) for international queries
+- Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
+- When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
+- Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
+- The project uses Pydantic AI as the main framework for AI integration, which provides a clean interface for working with LLMs
+- The Telegram bot is implemented using python-telegram-bot library and supports Hebrew language
+- SQLite is used for storing chat history with a simple schema
+- Logfire provides comprehensive monitoring for AI applications, tracking HTTP requests, database operations, and model interactions
+
+# Scratchpad
+
+## Project Overview
+- AI Agent connected to a Telegram bot
+- Uses Pydantic AI as the main framework
+- Supports Hebrew language
+- Stores chat history in SQLite database
+- Uses OpenAI's GPT-4 model
+
+## Project Structure
+- `main.py` - Main bot logic and Telegram integration
+- `database.py` - SQLite database operations
+- `config.py` - Configuration settings
+- `.env` - Environment variables (API keys)
+- `GitResurces/` - Contains external Git libraries including pydantic-ai
+- `.gitignore` - Defines files and directories to be ignored by Git
+
+## Recent Tasks
+
+### Logfire Integration
+[X] Understand Logfire's purpose and functionality
+[X] Check existing installation and configuration
+[X] Install required packages (`logfire[httpx]`)
+[X] Add Logfire configuration to main.py
+[X] Add monitoring for Telegram bot commands
+[X] Add monitoring for message handling
+[X] Add monitoring for database operations
+[X] Add proper cleanup and shutdown
+[X] Test the integration
+[X] Update documentation (.cursorrules)
+
+### Git Configuration
+[X] Create .gitignore file
+[X] Include Python-specific patterns
+[X] Include project-specific patterns (database files, environment variables, Logfire)
+[X] Update documentation (.cursorrules)
+
+### Next Steps
+- Consider adding custom dashboards in Logfire
+- Explore more advanced features of Pydantic AI (structured responses, tools)
+- Improve error handling and monitoring
+- Consider adding more Telegram bot commands

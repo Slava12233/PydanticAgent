@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1c2c 0%, #2a2d3e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+        .diagram-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            margin: 2rem;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .version-tag {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34D399;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold mb-4">דיאגרמת AI Agent</h1>
+            <span class="version-tag">גרסה 1.1</span>
+        </header>
+
+        <div class="diagram-container">
+            <div class="mermaid">
+            graph TB
+                subgraph Frontend["ממשק משתמש - Telegram"]
+                    UI[/"טלגרם בוט"\]
+                    MSG["הודעות משתמש"]
+                end
+
+                subgraph Backend["Python Application"]
+                    BOT["Python-Telegram-Bot"]
+                    DB[(SQLite DB)]
+                    AGENT["AI Agent"]
+                end
+
+                subgraph OpenAI["OpenAI Integration"]
+                    GPT["GPT-4 Model"]
+                end
+
+                UI -->|"קבלת הודעה"| BOT
+                BOT -->|"שמירת היסטוריה"| DB
+                BOT -->|"העברת הודעה"| AGENT
+                AGENT -->|"שליחת פרומפט"| GPT
+                GPT -->|"קבלת תשובה"| AGENT
+                AGENT -->|"החזרת תשובה"| BOT
+                BOT -->|"שליחת תשובה"| UI
+                DB -->|"טעינת היסטוריה"| BOT
+
+                classDef primary fill:#3B82F6,stroke:#2563EB,stroke-width:2px
+                classDef secondary fill:#10B981,stroke:#059669,stroke-width:2px
+                classDef accent fill:#8B5CF6,stroke:#7C3AED,stroke-width:2px
+                
+                class UI,MSG primary
+                class BOT,DB secondary
+                class AGENT,GPT accent
+            </div>
+        </div>
+
+        <div class="mt-8 bg-gray-800 rounded-lg p-6">
+            <h2 class="text-2xl font-bold mb-4">מאפיינים עיקריים</h2>
+            <ul class="list-disc list-inside space-y-2">
+                <li>שימוש בספריית python-telegram-bot לתקשורת עם Telegram</li>
+                <li>ניהול אסינכרוני של הודעות ותשובות</li>
+                <li>שמירת היסטוריית שיחות ב-SQLite</li>
+                <li>אינטגרציה עם OpenAI GPT-4</li>
+                <li>תמיכה בעברית ושמירת היסטוריית שיחה</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            theme: 'dark',
+            themeVariables: {
+                fontFamily: 'system-ui, -apple-system, sans-serif'
+            },
+            flowchart: {
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
