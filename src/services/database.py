@@ -2,7 +2,13 @@ import sqlite3
 from datetime import datetime
 from typing import Optional, List, Tuple
 import logging
-from config import DB_FILE
+import os
+import sys
+
+# Add the project root directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from src.core.config import DB_FILE
 
 # Import logfire for monitoring
 import logfire

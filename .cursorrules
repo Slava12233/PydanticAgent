@@ -23,6 +23,13 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Always call `logfire.configure()` before using any other Logfire functions.
 - Use `logfire.span()` for tracking longer operations and `logfire.info()`, `logfire.error()` for specific events.
 - Remember to add proper cleanup with `logfire.force_flush()` and `logfire.shutdown()` to ensure all logs are sent.
+- For multilingual documentation, include both Hebrew and English versions in the README.md file to make the project accessible to a wider audience.
+- Maintain a modular architecture by separating concerns into different files (e.g., agent.py for AI logic, main.py for bot interface).
+- When configuring timeouts in python-telegram-bot, use the defaults parameter in Application.builder() instead of trying to modify the _request.timeout attribute directly. The timeout is a tuple, not a single value.
+- In python-telegram-bot v21.10, use a single 'timeout' key in the defaults dictionary instead of separate timeout types like 'connect_timeout', 'read_timeout', etc.
+- In python-telegram-bot v21.10, use the Defaults class instead of a dictionary for the defaults parameter, and make sure to include tzinfo (e.g., datetime.timezone.utc).
+- In python-telegram-bot v21.10, the Defaults class does not accept any timeout parameters. Timeouts must be configured elsewhere, not in the Defaults object.
+- In python-telegram-bot v21.10, use the ApplicationBuilder methods (read_timeout, write_timeout, connect_timeout, pool_timeout) to set timeout values instead of trying to set them in the Defaults object.
 
 ## Cursor learned
 
@@ -34,6 +41,8 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - The Telegram bot is implemented using python-telegram-bot library and supports Hebrew language
 - SQLite is used for storing chat history with a simple schema
 - Logfire provides comprehensive monitoring for AI applications, tracking HTTP requests, database operations, and model interactions
+- When working with Telegram bots, increase timeout values to prevent "Timed out" errors during API calls
+- Use a modular architecture with separate files for bot logic, agent implementation, and main application flow
 
 # Scratchpad
 
@@ -45,12 +54,16 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Uses OpenAI's GPT-4 model
 
 ## Project Structure
-- `main.py` - Main bot logic and Telegram integration
-- `database.py` - SQLite database operations
-- `config.py` - Configuration settings
+- `run.py` - Entry point for running the bot
+- `src/main.py` - Main application flow
+- `src/bots/telegram_bot.py` - Telegram bot implementation
+- `src/agents/telegram_agent.py` - AI agent implementation and prompt handling
+- `src/services/database.py` - SQLite database operations
+- `src/core/config.py` - Configuration settings
 - `.env` - Environment variables (API keys)
 - `GitResurces/` - Contains external Git libraries including pydantic-ai
 - `.gitignore` - Defines files and directories to be ignored by Git
+- `README.md` - Project documentation in Hebrew and English
 
 ## Recent Tasks
 
@@ -71,9 +84,41 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 [X] Include Python-specific patterns
 [X] Include project-specific patterns (database files, environment variables, Logfire)
 [X] Update documentation (.cursorrules)
+[X] Initialize Git repository
+[X] Add remote repository
+[X] Commit and push initial files
+
+### Project Documentation
+[X] Create README.md file
+[X] Add Hebrew documentation
+[X] Add English documentation
+[X] Include installation instructions
+[X] Include usage instructions
+[X] Document project structure
+[X] Document available commands
+[X] Commit and push README.md
+
+### Code Refactoring
+[X] Create agent.py file for AI logic
+[X] Move Agent initialization and prompt handling to agent.py
+[X] Add TelegramAgent class with get_response and stream_response methods
+[X] Update main.py to use the new TelegramAgent class
+[X] Update README.md to reflect the new architecture
+[X] Update .cursorrules with the changes
+
+### Fixing Timeout Issues and Improving Architecture
+[X] Create a dedicated bots directory for bot implementations
+[X] Create telegram_bot.py with improved timeout handling
+[X] Update main.py to use the new modular structure
+[X] Update run.py with better error handling
+[X] Increase timeout values for Telegram API calls
+[X] Add retry logic for API calls
+[X] Update documentation (.cursorrules)
 
 ### Next Steps
+- Test the new architecture with the improved timeout handling
 - Consider adding custom dashboards in Logfire
 - Explore more advanced features of Pydantic AI (structured responses, tools)
 - Improve error handling and monitoring
 - Consider adding more Telegram bot commands
+- Implement streaming responses using the stream_response method

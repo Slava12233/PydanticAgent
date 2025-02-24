@@ -13,6 +13,8 @@ A smart Telegram bot based on Pydantic AI and OpenAI GPT-4. The bot allows users
 - **Powered by GPT-4** - Uses OpenAI's advanced language model
 - **Advanced Monitoring** - Integration with Logfire for performance monitoring and troubleshooting
 - **Built-in Commands** - Support for basic commands like `/start`, `/help`, and `/clear`
+- **Modular Architecture** - Clean separation of concerns for easier maintenance and future development
+- **Improved Timeout Handling** - Configurable timeout settings to prevent connection issues
 
 ## 🛠️ Installation
 
@@ -62,7 +64,7 @@ OPENAI_API_KEY=your_openai_api_key
 To run the bot, simply execute:
 
 ```bash
-python main.py
+python run.py
 ```
 
 The bot will start running and be available on Telegram. Send `/start` to the bot to begin a conversation.
@@ -75,10 +77,34 @@ The bot will start running and be available on Telegram. Send `/start` to the bo
 
 ## 🧩 Project Structure
 
-- `main.py` - Main bot logic and Telegram interface
-- `database.py` - SQLite database operations
-- `config.py` - Configuration settings
-- `.env` - Environment variables (API keys)
+The project follows a modular architecture:
+
+```
+PydanticAgent/
+├── run.py                  # Entry point for running the bot
+├── requirements.txt        # Python dependencies
+├── .env                    # Environment variables (not in Git)
+├── .gitignore              # Git ignore file
+├── README.md               # Project documentation
+├── chat_history.db         # SQLite database for chat history
+└── src/                    # Source code directory
+    ├── __init__.py         # Package initialization
+    ├── main.py             # Main application flow
+    ├── agents/             # AI agent modules
+    │   ├── __init__.py
+    │   └── telegram_agent.py  # Telegram bot agent implementation
+    ├── bots/               # Bot implementations
+    │   ├── __init__.py
+    │   └── telegram_bot.py # Telegram bot implementation
+    ├── core/               # Core functionality
+    │   ├── __init__.py
+    │   └── config.py       # Configuration settings
+    ├── services/           # Service modules
+    │   ├── __init__.py
+    │   └── database.py     # Database operations
+    └── utils/              # Utility functions
+        └── __init__.py
+```
 
 ## 📊 Monitoring with Logfire
 
@@ -87,6 +113,18 @@ The project uses Logfire for comprehensive monitoring of:
 - Database operations
 - Model interactions
 - Errors and performance
+
+## 🔧 Technical Notes
+
+### Timeout Configuration
+
+The bot uses the following timeout configuration to prevent connection issues:
+- Read timeout: 30 seconds
+- Write timeout: 30 seconds
+- Connect timeout: 30 seconds
+- Pool timeout: 30 seconds
+
+These settings can be adjusted in `src/bots/telegram_bot.py` if needed.
 
 ## 🤝 Contributing
 
@@ -123,6 +161,8 @@ If you have any questions or suggestions, don't hesitate to reach out!
 - **מבוסס GPT-4** - שימוש במודל השפה המתקדם של OpenAI
 - **ניטור מתקדם** - שילוב Logfire לניטור ביצועים ואיתור תקלות
 - **פקודות מובנות** - תמיכה בפקודות בסיסיות כמו `/start`, `/help`, ו-`/clear`
+- **ארכיטקטורה מודולרית** - הפרדה נקייה בין רכיבים לתחזוקה קלה ופיתוח עתידי
+- **טיפול משופר בזמני תגובה** - הגדרות timeout מותאמות למניעת בעיות חיבור
 
 ## 🛠️ התקנה
 
@@ -172,7 +212,7 @@ OPENAI_API_KEY=your_openai_api_key
 להפעלת הבוט, פשוט הרץ:
 
 ```bash
-python main.py
+python run.py
 ```
 
 הבוט יתחיל לפעול ויהיה זמין בטלגרם. שלח `/start` לבוט כדי להתחיל שיחה.
@@ -185,10 +225,34 @@ python main.py
 
 ## 🧩 מבנה הפרויקט
 
-- `main.py` - הלוגיקה הראשית של הבוט וממשק טלגרם
-- `database.py` - פעולות מסד הנתונים SQLite
-- `config.py` - הגדרות תצורה
-- `.env` - משתני סביבה (מפתחות API)
+הפרויקט מאורגן בארכיטקטורה מודולרית:
+
+```
+PydanticAgent/
+├── run.py                  # נקודת כניסה להפעלת הבוט
+├── requirements.txt        # תלויות Python
+├── .env                    # משתני סביבה (לא ב-Git)
+├── .gitignore              # קובץ התעלמות של Git
+├── README.md               # תיעוד הפרויקט
+├── chat_history.db         # מסד נתונים SQLite להיסטוריית שיחות
+└── src/                    # תיקיית קוד המקור
+    ├── __init__.py         # אתחול החבילה
+    ├── main.py             # לוגיקה ראשית של הבוט
+    ├── agents/             # מודולי סוכן AI
+    │   ├── __init__.py
+    │   └── telegram_agent.py  # מימוש סוכן בוט טלגרם
+    ├── bots/               # מימושי בוטים
+    │   ├── __init__.py
+    │   └── telegram_bot.py # מימוש בוט טלגרם
+    ├── core/               # פונקציונליות ליבה
+    │   ├── __init__.py
+    │   └── config.py       # הגדרות תצורה
+    ├── services/           # מודולי שירות
+    │   ├── __init__.py
+    │   └── database.py     # פעולות מסד נתונים
+    └── utils/              # פונקציות שירות
+        └── __init__.py
+```
 
 ## 📊 ניטור עם Logfire
 
@@ -197,6 +261,18 @@ python main.py
 - פעולות מסד נתונים
 - אינטראקציות עם המודל
 - שגיאות וביצועים
+
+## 🔧 הערות טכניות
+
+### הגדרות זמני תגובה
+
+הבוט משתמש בהגדרות זמני תגובה הבאות למניעת בעיות חיבור:
+- זמן קריאה: 30 שניות
+- זמן כתיבה: 30 שניות
+- זמן חיבור: 30 שניות
+- זמן פול: 30 שניות
+
+ניתן לשנות הגדרות אלה בקובץ `src/bots/telegram_bot.py` במידת הצורך.
 
 ## 🤝 תרומה
 
