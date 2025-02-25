@@ -30,6 +30,11 @@ var/
 *.sqlite
 *.sqlite3
 chat_history.db
+# PostgreSQL
+*.psql
+*.dump
+pg_data/
+postgres_data/
 
 # Environment variables
 .env

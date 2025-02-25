@@ -1,9 +1,10 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 from pydantic import BaseModel
 from pydantic_ai import Agent as PydanticAgent
 import logfire
 import os
 import sys
+from datetime import datetime
 
 # Add the project root directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -29,15 +30,15 @@ class TelegramAgent:
     
     async def get_response(self, 
                            user_message: str, 
-                           history: List[Tuple[str, str, str]] = None) -> str:
+                           history: List[Dict[str, Any]] = None) -> str:
         """קבלת תשובה מה-Agent"""
         with logfire.span('agent_get_response', message_length=len(user_message)):
             # בניית הפרומפט עם היסטוריה
             history_text = ""
             if history:
                 history_text = "היסטוריית שיחה:\n" + "\n".join([
-                    f"User: {msg}\nAssistant: {resp}" 
-                    for msg, resp, _ in reversed(history)
+                    f"User: {msg['message']}\nAssistant: {msg['response']}" 
+                    for msg in history
                 ]) + "\n\n"
             
             prompt = (
@@ -57,15 +58,15 @@ class TelegramAgent:
     
     async def stream_response(self, 
                              user_message: str, 
-                             history: List[Tuple[str, str, str]] = None):
+                             history: List[Dict[str, Any]] = None):
         """הזרמת תשובה מה-Agent - שימושי לתגובות בזמן אמת"""
         with logfire.span('agent_stream_response', message_length=len(user_message)):
             # בניית הפרומפט (כמו ב-get_response)
             history_text = ""
             if history:
                 history_text = "היסטוריית שיחה:\n" + "\n".join([
-                    f"User: {msg}\nAssistant: {resp}" 
-                    for msg, resp, _ in reversed(history)
+                    f"User: {msg['message']}\nAssistant: {msg['response']}" 
+                    for msg in history
                 ]) + "\n\n"
             
             prompt = (

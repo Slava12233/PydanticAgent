@@ -19,11 +19,15 @@ os.environ['LOGFIRE_IGNORE_NO_CONFIG'] = '1'
 
 # Import the TelegramBot class
 from src.bots.telegram_bot import TelegramBot
-from src.services.database import db
+# Import the new database module
+from src.database.database import db
 
 async def main_async():
     """Async main function to run the bot."""
     try:
+        # Initialize the database
+        db.init_db()
+        
         # Initialize and run the Telegram bot
         bot = TelegramBot()
         await bot.run()

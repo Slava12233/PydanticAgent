@@ -30,6 +30,14 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - In python-telegram-bot v21.10, use the Defaults class instead of a dictionary for the defaults parameter, and make sure to include tzinfo (e.g., datetime.timezone.utc).
 - In python-telegram-bot v21.10, the Defaults class does not accept any timeout parameters. Timeouts must be configured elsewhere, not in the Defaults object.
 - In python-telegram-bot v21.10, use the ApplicationBuilder methods (read_timeout, write_timeout, connect_timeout, pool_timeout) to set timeout values instead of trying to set them in the Defaults object.
+- When migrating from SQLite to PostgreSQL, use SQLAlchemy as an ORM to make the transition smoother and maintain a consistent API.
+- For PostgreSQL connections, install both `psycopg2-binary` and `sqlalchemy` packages.
+- Use environment variables to store database connection details (host, port, database name, username, password) for better security and flexibility.
+- When working with SQLAlchemy, define models that inherit from `declarative_base()` to create database tables.
+- In SQLAlchemy, use `sessionmaker` to create database sessions for interacting with the database.
+- Remember to call `db.init_db()` before using the database to ensure tables are created and the connection is established.
+- When accessing an object's attributes after a database session is closed, you'll get a DetachedInstanceError. Save any needed values before closing the session.
+- After migrating from SQLite to PostgreSQL, make sure to remove all references to the old database file and code to avoid confusion.
 
 ## Cursor learned
 
@@ -39,7 +47,7 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
 - The project uses Pydantic AI as the main framework for AI integration, which provides a clean interface for working with LLMs
 - The Telegram bot is implemented using python-telegram-bot library and supports Hebrew language
-- SQLite is used for storing chat history with a simple schema
+- PostgreSQL is used for storing chat history with SQLAlchemy as the ORM
 - Logfire provides comprehensive monitoring for AI applications, tracking HTTP requests, database operations, and model interactions
 - When working with Telegram bots, increase timeout values to prevent "Timed out" errors during API calls
 - Use a modular architecture with separate files for bot logic, agent implementation, and main application flow
@@ -50,7 +58,7 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - AI Agent connected to a Telegram bot
 - Uses Pydantic AI as the main framework
 - Supports Hebrew language
-- Stores chat history in SQLite database
+- Stores chat history in PostgreSQL database
 - Uses OpenAI's GPT-4 model
 
 ## Project Structure
@@ -58,9 +66,9 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - `src/main.py` - Main application flow
 - `src/bots/telegram_bot.py` - Telegram bot implementation
 - `src/agents/telegram_agent.py` - AI agent implementation and prompt handling
-- `src/services/database.py` - SQLite database operations
+- `src/database/database.py` - PostgreSQL database operations
 - `src/core/config.py` - Configuration settings
-- `.env` - Environment variables (API keys)
+- `.env` - Environment variables (API keys, database credentials)
 - `GitResurces/` - Contains external Git libraries including pydantic-ai
 - `.gitignore` - Defines files and directories to be ignored by Git
 - `README.md` - Project documentation in Hebrew and English
@@ -115,9 +123,34 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 [X] Add retry logic for API calls
 [X] Update documentation (.cursorrules)
 
+### PostgreSQL Migration
+[X] Install required packages (psycopg2-binary, sqlalchemy)
+[X] Create database directory structure
+[X] Create database.py with SQLAlchemy models and operations
+[X] Update config.py with PostgreSQL connection settings
+[X] Update .env with PostgreSQL credentials
+[X] Update main.py to use the new database module
+[X] Update telegram_bot.py to use the new database module
+[X] Update telegram_agent.py to handle the new history format
+[X] Update .gitignore to include PostgreSQL-specific files
+[X] Update README.md with PostgreSQL information
+[X] Update requirements.txt with new dependencies
+[X] Update .cursorrules with lessons learned
+
+### Cleanup and Finalization
+[X] Remove old SQLite database file (chat_history.db)
+[X] Remove old services directory with SQLite code
+[X] Update config.py to remove references to SQLite
+[X] Test the application with PostgreSQL only
+[X] Update documentation (.cursorrules)
+[X] Update README.md to reflect the changes
+[ ] Commit and push all changes to Git
+
 ### Next Steps
-- Test the new architecture with the improved timeout handling
-- Consider adding custom dashboards in Logfire
+- Consider adding database indexes for performance optimization
+- Add database connection pooling for better resource management
+- Implement database backup and restore functionality
+- Consider adding more advanced PostgreSQL features (full-text search, JSON storage)
 - Explore more advanced features of Pydantic AI (structured responses, tools)
 - Improve error handling and monitoring
 - Consider adding more Telegram bot commands

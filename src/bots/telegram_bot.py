@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Dict
 import datetime
+import traceback
 
 from telegram import Update
 from telegram.ext import (
@@ -16,15 +17,14 @@ import httpx
 
 # Import from our module structure
 from src.core.config import TELEGRAM_TOKEN, ALLOWED_COMMANDS
-from src.services.database import db
+# Import the new database module
+from src.database.database import db
 from src.agents.telegram_agent import TelegramAgent
+# Import the new logger module
+from src.utils.logger import setup_logger, log_exception, log_database_operation, log_telegram_message
 
 # Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+logger = setup_logger('telegram_bot')
 
 # Configure and initialize Logfire for monitoring
 import logfire
@@ -67,6 +67,36 @@ class TelegramBot:
         logfire.info('command_clear', user_id=user_id)
         db.clear_chat_history(user_id)
         await update.message.reply_text("היסטוריית השיחה נמחקה! 🗑️")
+        
+    async def stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle the /stats command - show database statistics."""
+        user_id = update.effective_user.id
+        
+        # Log the stats command
+        logfire.info('command_stats', user_id=user_id)
+        
+        try:
+            # Get statistics from database
+            message_count = db.get_message_count()
+            user_count = db.get_user_count()
+            
+            # Get user's personal stats
+            user_history = db.get_chat_history(user_id)
+            user_message_count = len(user_history)
+            
+            stats_message = (
+                "📊 סטטיסטיקות הבוט:\n\n"
+                f"סה\"כ הודעות במערכת: {message_count}\n"
+                f"מספר משתמשים ייחודיים: {user_count}\n\n"
+                f"הסטטיסטיקות שלך:\n"
+                f"מספר ההודעות שלך: {user_message_count}\n"
+            )
+            
+            await update.message.reply_text(stats_message)
+        except Exception as e:
+            logger.error(f"Error getting stats: {e}")
+            logfire.error('stats_error', user_id=user_id, error=str(e))
+            await update.message.reply_text("אירעה שגיאה בהצגת הסטטיסטיקות. אנא נסה שוב מאוחר יותר.")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle incoming messages."""
@@ -78,29 +108,68 @@ class TelegramBot:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
         try:
+            # Log the incoming message
+            log_telegram_message(logger, user_id, message_text)
+            
             # Create a Logfire span to track the entire message handling process
             with logfire.span('handle_telegram_message', user_id=user_id, message_length=len(message_text)):
                 # Get chat history
-                history = db.get_chat_history(user_id)
+                try:
+                    history = db.get_chat_history(user_id)
+                    logger.debug(f"Retrieved chat history for user {user_id}: {len(history)} messages")
+                except Exception as db_error:
+                    log_exception(logger, db_error, {'operation': 'get_chat_history', 'user_id': user_id})
+                    history = []  # Use empty history if retrieval fails
                 
                 # קריאה ל-Agent
-                response = await self.agent.get_response(message_text, history)
-                
-                logger.info(f"Got response for user {user_id}")
+                try:
+                    response = await self.agent.get_response(message_text, history)
+                    logger.info(f"Got response for user {user_id}")
+                except Exception as agent_error:
+                    log_exception(logger, agent_error, {'operation': 'agent_get_response', 'user_id': user_id})
+                    response = "מצטער, אירעה שגיאה בעיבוד ההודעה שלך. אנא נסה שוב מאוחר יותר."
                 
                 # Save to database
-                db.save_message(user_id, message_text, response)
+                try:
+                    # Log the database operation with detailed parameters
+                    log_data = {
+                        'user_id': user_id,
+                        'message_length': len(message_text),
+                        'response_length': len(response),
+                        'user_id_type': type(user_id).__name__,  # Log the type of user_id
+                        'user_id_value': str(user_id)  # Convert to string to ensure it's loggable
+                    }
+                    logger.debug(f"Saving message with parameters: {log_data}")
+                    
+                    db.save_message(user_id, message_text, response)
+                    log_database_operation(logger, 'save_message', log_data, 'success')
+                except Exception as db_error:
+                    error_context = {
+                        'operation': 'save_message',
+                        'user_id': user_id,
+                        'user_id_type': type(user_id).__name__,
+                        'message_length': len(message_text),
+                        'response_length': len(response)
+                    }
+                    log_exception(logger, db_error, error_context)
+                    # Continue to send response even if saving fails
 
                 # Send response
                 await update.message.reply_text(response)
+                log_telegram_message(logger, user_id, message_text, response)
 
         except Exception as e:
-            logger.error(f"Error handling message: {e}")
+            error_context = {
+                'user_id': user_id,
+                'message_length': len(message_text) if message_text else 0
+            }
+            log_exception(logger, e, error_context)
             # Log the error in Logfire
-            logfire.error('message_handling_error', user_id=user_id, error=str(e))
-            await update.message.reply_text(
-                "מצטער, אירעה שגיאה בעיבוד ההודעה שלך. אנא נסה שוב מאוחר יותר."
-            )
+            with logfire.span('message_handling_error'):
+                logfire.error(str(e))
+            
+            # Send error message to user
+            await update.message.reply_text("מצטער, אירעה שגיאה בעיבוד ההודעה שלך. אנא נסה שוב מאוחר יותר.")
         finally:
             # Clear typing status
             self.typing_status[user_id] = False
@@ -130,6 +199,7 @@ class TelegramBot:
             application.add_handler(CommandHandler("start", self.start))
             application.add_handler(CommandHandler("help", self.help))
             application.add_handler(CommandHandler("clear", self.clear))
+            application.add_handler(CommandHandler("stats", self.stats))
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
             # Log successful initialization
