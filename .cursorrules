@@ -38,6 +38,24 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Remember to call `db.init_db()` before using the database to ensure tables are created and the connection is established.
 - When accessing an object's attributes after a database session is closed, you'll get a DetachedInstanceError. Save any needed values before closing the session.
 - After migrating from SQLite to PostgreSQL, make sure to remove all references to the old database file and code to avoid confusion.
+- When implementing a RAG system, create a separate module for document management to keep the code organized.
+- For RAG systems, use a database model that can store document chunks with metadata for efficient retrieval.
+- Implement a command-line interface for document management to allow for easy testing and administration.
+- When adding documents to a RAG system, split them into smaller chunks for more precise retrieval.
+- Include proper error handling in document management functions to prevent crashes when dealing with file operations.
+- Make sure to update the README.md with detailed instructions on how to use the RAG system, both via the bot and command line.
+- When using SQLAlchemy, always use text() for raw SQL queries to avoid the "Textual SQL expression should be explicitly declared as text()" error.
+- When using pgvector in PostgreSQL, make sure the extension is installed in the database. If not, use ARRAY(Float) as a temporary alternative for storing embeddings.
+- When testing database functionality, verify that the tables exist and have the correct structure before running more complex tests. This helps identify schema issues early.
+- For Telegram user IDs, use BigInteger instead of Integer in SQLAlchemy models, as Telegram IDs can be very large numbers that exceed the range of a standard 32-bit integer.
+- When implementing search functionality in a RAG system, set a min_similarity parameter (e.g., 0.0) to ensure results are returned even when the similarity score is low.
+- Provide clear and detailed feedback to users when they interact with document management features, including emojis and formatting for better readability.
+- Validate user input for document titles and content to prevent issues with empty or oversized files.
+- Include comprehensive error handling for file operations, especially when dealing with different encodings and file formats.
+- When displaying search results, convert similarity scores to percentages for better user understanding (e.g., 0.75 → 75%).
+- Use Markdown formatting in Telegram messages to improve readability and highlight important information.
+- When importing the datetime module, make sure to import the specific classes you need (e.g., `from datetime import datetime, timezone`) rather than importing the entire module (e.g., `import datetime`). This avoids errors like `datetime.utcnow()` vs `datetime.datetime.utcnow()`.
+- When using timezone information with datetime, remember to import the timezone class explicitly: `from datetime import timezone`.
 
 ## Cursor learned
 
@@ -51,6 +69,10 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Logfire provides comprehensive monitoring for AI applications, tracking HTTP requests, database operations, and model interactions
 - When working with Telegram bots, increase timeout values to prevent "Timed out" errors during API calls
 - Use a modular architecture with separate files for bot logic, agent implementation, and main application flow
+- For RAG systems, create a dedicated tools directory to house utility functions like document management
+- When implementing a RAG system, update the configuration file to include new commands for document operations
+- Store document chunks in the database with metadata to enable efficient retrieval during conversations
+- Implement both bot commands and command-line interfaces for document management to provide flexibility
 
 # Scratchpad
 
@@ -60,6 +82,7 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Supports Hebrew language
 - Stores chat history in PostgreSQL database
 - Uses OpenAI's GPT-4 model
+- Includes RAG system for enhanced responses based on custom documents
 
 ## Project Structure
 - `run.py` - Entry point for running the bot
@@ -67,6 +90,9 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - `src/bots/telegram_bot.py` - Telegram bot implementation
 - `src/agents/telegram_agent.py` - AI agent implementation and prompt handling
 - `src/database/database.py` - PostgreSQL database operations
+- `src/database/models.py` - Database models for messages and documents
+- `src/database/rag_utils.py` - RAG utility functions
+- `src/tools/document_manager.py` - Document management for RAG
 - `src/core/config.py` - Configuration settings
 - `.env` - Environment variables (API keys, database credentials)
 - `GitResurces/` - Contains external Git libraries including pydantic-ai
@@ -144,7 +170,81 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 [X] Test the application with PostgreSQL only
 [X] Update documentation (.cursorrules)
 [X] Update README.md to reflect the changes
-[ ] Commit and push all changes to Git
+[X] Commit and push all changes to Git
+
+### RAG System Implementation
+[X] Create database models for documents and chunks
+[X] Implement RAG utility functions
+[X] Create document manager tool
+[X] Update configuration with new commands
+[X] Update TelegramAgent to support RAG
+[X] Update telegram_bot.py with document management commands
+[X] Update README.md with RAG system documentation
+[X] Update .cursorrules with lessons learned
+
+### Fixing Telegram User ID Issue and Improving RAG
+[X] Identify the issue with Telegram user IDs being too large for Integer field
+[X] Update models.py to use BigInteger for user IDs
+[X] Recreate database tables with the new schema
+[X] Improve the RAG search functionality with min_similarity parameter
+[X] Enhance the prompt in telegram_agent.py for better handling of personal information
+[X] Improve user feedback in document management commands
+[X] Add better error handling for file operations
+[X] Update .cursorrules with lessons learned
+
+### Database and RAG Testing Plan
+[X] Create comprehensive test script for database functionality
+[X] Test user and conversation management
+[X] Test message storage and retrieval
+[X] Test RAG document management
+[X] Test RAG search functionality
+[X] Test integration with the Telegram agent
+[X] Document test results and fix any issues
+
+#### 1. Database Connection Testing
+[X] Test connection to PostgreSQL database
+[X] Verify all tables are created correctly
+[X] Test connection pooling and timeout handling
+[X] Test error handling for connection issues
+
+#### 2. User and Conversation Management Testing
+[X] Test user creation and retrieval
+[X] Test conversation creation and management
+[X] Test active conversation switching
+[X] Test conversation history clearing
+
+#### 3. Message Storage and Retrieval Testing
+[X] Test saving user and assistant messages
+[X] Test retrieving chat history
+[X] Test message formatting for agent context
+[X] Test message count and statistics
+
+#### 4. RAG Document Management Testing
+[X] Test document addition from file
+[X] Test document addition from direct content
+[X] Test document chunking functionality
+[X] Test document metadata storage
+[X] Test document listing functionality
+[X] Test document deletion
+
+#### 5. RAG Search Testing
+[X] Test embedding creation
+[X] Test vector similarity search
+[X] Test search result ranking
+[X] Test search result formatting
+[X] Test search performance with multiple documents
+
+#### 6. Agent Integration Testing
+[X] Test RAG integration with agent responses
+[X] Test context enhancement with RAG results
+[X] Test streaming responses with RAG
+[X] Test error handling in RAG-enhanced responses
+
+#### 7. Telegram Bot Command Testing
+[X] Test /add_document command flow
+[X] Test /search_documents command flow
+[X] Test document upload and processing
+[X] Test conversation state management during document operations
 
 ### Next Steps
 - Consider adding database indexes for performance optimization
@@ -155,3 +255,7 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Improve error handling and monitoring
 - Consider adding more Telegram bot commands
 - Implement streaming responses using the stream_response method
+- Add support for more document formats (PDF, DOCX, etc.)
+- Implement document categorization and tagging
+- Add user-specific document collections
+- Implement document versioning
