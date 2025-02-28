@@ -10,10 +10,23 @@ import time
 from datetime import datetime
 import json
 from typing import Dict, List, Any, Optional
-import logfire
 
 # הגדרת משתנה סביבה להתעלמות מאזהרות Logfire
 os.environ["LOGFIRE_IGNORE_NO_CONFIG"] = "1"
+# הגדרת פרויקט logfire מראש
+if 'LOGFIRE_PROJECT' not in os.environ:
+    os.environ['LOGFIRE_PROJECT'] = 'slavalabovkin1223/newtest'
+
+import logfire
+# נסיון להגדיר את ה-PydanticPlugin אם הוא זמין
+try:
+    logfire.configure(
+        token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7',
+        pydantic_plugin=logfire.PydanticPlugin(record='all')
+    )
+except (AttributeError, ImportError):
+    # אם ה-PydanticPlugin לא זמין, נגדיר רק את הטוקן
+    logfire.configure(token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7')
 
 # הוספת תיקיית הפרויקט לנתיב החיפוש
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

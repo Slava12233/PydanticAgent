@@ -15,7 +15,10 @@ A smart Telegram bot based on Pydantic AI and OpenAI GPT-4. The bot allows users
 - **Built-in Commands** - Support for basic commands like `/start`, `/help`, and `/clear`
 - **Modular Architecture** - Clean separation of concerns for easier maintenance and future development
 - **Improved Timeout Handling** - Configurable timeout settings to prevent connection issues
-- **RAG System** - Retrieval Augmented Generation for enhanced responses based on custom documents
+- **Enhanced RAG System** - Retrieval Augmented Generation for enhanced responses based on custom documents with support for multiple file types (PDF, Word, Excel, PowerPoint, HTML, and plain text)
+- **Multi-Model Support** - Support for both OpenAI models (GPT-4, GPT-3.5-Turbo, GPT-4o) and Anthropic models (Claude-3-Opus, Claude-3-Sonnet)
+- **Fallback Mechanism** - Automatic fallback to alternative models in case of API quota issues
+- **Advanced Error Handling** - Specific error messages for different types of errors (quota, timeout, content filter)
 
 ## 🛠️ Installation
 
@@ -94,9 +97,42 @@ The bot will start running and be available on Telegram. Send `/start` to the bo
 - `/help` - Display help and list of commands
 - `/clear` - Clear chat history
 - `/stats` - Display usage statistics
+- `/switch_model [model_name]` - Change the primary AI model
+- `/set_fallback [model_name]` - Set a fallback model for handling API quota issues
+- `/models` - Display the current primary and fallback models in use
 - `/add_document` - Add a document to the knowledge base (RAG system)
 - `/search_documents` - Search for information in the knowledge base
 - `/cancel` - Cancel the current operation
+
+## 📚 Supported File Types for RAG System
+
+The bot now supports multiple file types for the RAG (Retrieval Augmented Generation) system:
+
+- **Documents**: PDF, Word (DOCX)
+- **Spreadsheets**: Excel (XLSX)
+- **Presentations**: PowerPoint (PPTX)
+- **Web**: HTML, HTM
+- **Text**: TXT, MD, JSON, XML, CSV
+
+## 🔍 Using the RAG System
+
+### Adding a Document
+
+1. Start a conversation with the bot
+2. Send the `/add_document` command
+3. Upload a supported file (up to 20MB)
+4. Provide a title for the document (or type "skip" to use the filename)
+5. The bot will process the document and add it to your knowledge base
+
+### Searching Documents
+
+1. Send the `/search_documents` command
+2. Enter your search query
+3. The bot will return the most relevant information from your documents
+
+### Using Documents in Conversations
+
+Once you've added documents to your knowledge base, the bot will automatically use this information to enhance its responses when you ask questions related to the content of your documents.
 
 ## 🧩 Project Structure
 
@@ -289,7 +325,10 @@ If you have any questions or suggestions, don't hesitate to reach out!
 - **פקודות מובנות** - תמיכה בפקודות בסיסיות כמו `/start`, `/help`, ו-`/clear`
 - **ארכיטקטורה מודולרית** - הפרדה נקייה בין רכיבים לתחזוקה קלה ופיתוח עתידי
 - **טיפול משופר בזמני תגובה** - הגדרות timeout מותאמות למניעת בעיות חיבור
-- **מערכת RAG** - מערכת Retrieval Augmented Generation לשיפור תשובות על בסיס מסמכים מותאמים אישית
+- **מערכת RAG משופרת** - מערכת Retrieval Augmented Generation לשיפור תשובות על בסיס מסמכים מותאמים אישית עם תמיכה במגוון סוגי קבצים (PDF, Word, Excel, PowerPoint, HTML וטקסט רגיל)
+- **מודלים רבים תמיכה** - תמיכה במודלים של OpenAI (GPT-4, GPT-3.5-Turbo, GPT-4o) ומודלים של Anthropic (Claude-3-Opus, Claude-3-Sonnet)
+- **מסגרת מסגרת** - מסגרת מסגרת למניעת בעיות מסגרת
+- **הטיפול המשופר** - הטיפול המשופר בשגיאות ספציפיות לסוגים שונים של שגיאות (מסגרת, זמן קצוב, מסגרת מסגרת)
 
 ## 🛠️ התקנה
 
@@ -368,9 +407,42 @@ python run.py
 - `/help` - הצג עזרה ורשימת פקודות
 - `/clear` - נקה היסטוריית שיחה
 - `/stats` - הצג סטטיסטיקות שימוש
+- `/switch_model [model_name]` - מצב מודל ראשי
+- `/set_fallback [model_name]` - מצב מודל משנה להטלת בעיות מסגרת
+- `/models` - הצג מודלים ראשיים ומשנים בשימוש
 - `/add_document` - הוסף מסמך למאגר הידע (מערכת RAG)
 - `/search_documents` - חפש במסמכים
 - `/cancel` - בטל את הפעולה הנוכחית
+
+## 📚 סוגי קבצים נתמכים למערכת RAG
+
+הבוט כעת תומך במגוון סוגי קבצים למערכת ה-RAG (Retrieval Augmented Generation):
+
+- **מסמכים**: PDF, Word (DOCX)
+- **גיליונות**: Excel (XLSX)
+- **מצגות**: PowerPoint (PPTX)
+- **אינטרנט**: HTML, HTM
+- **טקסט**: TXT, MD, JSON, XML, CSV
+
+## 🔍 שימוש במערכת RAG
+
+### הוספת מסמך
+
+1. התחל שיחה עם הבוט
+2. שלח את הפקודה `/add_document`
+3. העלה קובץ נתמך (עד 20MB)
+4. הזן כותרת למסמך (או הקלד "דלג" כדי להשתמש בשם הקובץ)
+5. הבוט יעבד את המסמך ויוסיף אותו למאגר הידע שלך
+
+### חיפוש במסמכים
+
+1. שלח את הפקודה `/search_documents`
+2. הזן את שאילתת החיפוש שלך
+3. הבוט יחזיר את המידע הרלוונטי ביותר מהמסמכים שלך
+
+### שימוש במסמכים בשיחות
+
+לאחר שהוספת מסמכים למאגר הידע שלך, הבוט ישתמש באופן אוטומטי במידע זה כדי לשפר את תשובותיו כאשר תשאל שאלות הקשורות לתוכן המסמכים שלך.
 
 ## 🧩 מבנה הפרויקט
 
@@ -484,43 +556,43 @@ python -m src.tools.document_manager list
 python -m src.tools.document_manager delete מזהה_המסמך
 ```
 
-### צפייה בהודעות שמורות
+### Viewing Stored Messages
 
-כדי לצפות בהודעות השמורות במסד הנתונים, תוכל להשתמש בסקריפט השירות המצורף:
+To view messages stored in the database, you can use the provided utility script:
 
 ```bash
-# הצג הודעות במסוף
+# Display messages in the console
 python src/database/view_messages.py
 
-# שמור הודעות לקובץ CSV
+# Save messages to a CSV file
 python src/database/view_messages.py --csv
 
-# הצג מסמכים במסד הנתונים
+# Display documents in the database
 python src/database/view_messages.py --documents
 ```
 
-### מבנה מסד הנתונים
+### Database Structure
 
-מערכת ה-RAG משתמשת בטבלאות הבאות במסד הנתונים:
+The RAG system uses the following database tables:
 
-1. **documents** - מאחסנת מטא-דאטה ותוכן מלא של מסמכים
-   - `id` - מזהה ייחודי למסמך
-   - `title` - כותרת המסמך
-   - `source` - מקור המסמך (למשל, "telegram_upload", "file", "direct")
-   - `content` - תוכן מלא של המסמך
-   - `doc_metadata` - מטא-דאטה בפורמט JSON על המסמך
-   - `upload_date` - מועד הוספת המסמך
+1. **documents** - Stores document metadata and full content
+   - `id` - Unique document identifier
+   - `title` - Document title
+   - `source` - Document source (e.g., "telegram_upload", "file", "direct")
+   - `content` - Full document content
+   - `doc_metadata` - JSON metadata about the document
+   - `upload_date` - When the document was added
 
-2. **document_chunks** - מאחסנת קטעי מסמכים עם embeddings לחיפוש סמנטי
-   - `id` - מזהה ייחודי לקטע
-   - `document_id` - הפניה למסמך האב
-   - `content` - תוכן הקטע
-   - `chunk_index` - מיקום במסמך המקורי
-   - `embedding` - וקטור embedding לחיפוש סמנטי
+2. **document_chunks** - Stores document chunks with embeddings for semantic search
+   - `id` - Unique chunk identifier
+   - `document_id` - Reference to parent document
+   - `content` - Chunk content
+   - `chunk_index` - Position in the original document
+   - `embedding` - Vector embedding for semantic search
 
-### בדיקות
+### Testing
 
-הפרויקט כולל סקריפט בדיקה מקיף למסד הנתונים ולפונקציונליות ה-RAG:
+The project includes a comprehensive testing script for the database and RAG functionality:
 
 ```bash
 python -m src.database.test_database
@@ -543,5 +615,34 @@ python -m src.database.test_database
 ## 📞 יצירת קשר
 
 אם יש לך שאלות או הצעות, אל תהסס ליצור קשר!
+
+## 🤖 מודלים נתמכים
+
+הבוט תומך במודלים הבאים:
+
+### מודלים של OpenAI
+- `gpt-4` - מודל הכי מוצלח למשימות מורכבות
+- `gpt-4o` - גרסה מומשטת של GPT-4
+- `gpt-3.5-turbo` - מודל מהיר יותר וזול יותר
+
+### מודלים של Anthropic
+- `claude-3-opus` - מודל הכי מוצלח של Anthropic
+- `claude-3-sonnet` - מודל משתנה למשימות רבות
+
+כדי להחליף מודלים, השתמש בפקודה `/switch_model` והזן את שם המודל:
+```
+/switch_model gpt-4
+/switch_model claude-3-sonnet
+```
+
+כדי להגדיר מודל משנה (מודל שמשמש כאשר המודל הראשי נפגע מבעיות מסגרת):
+```
+/set_fallback gpt-3.5-turbo
+```
+
+כדי לראות איזה מודלים משתמשים כעת:
+```
+/models
+```
 
 </div> 

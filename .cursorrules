@@ -56,6 +56,17 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Use Markdown formatting in Telegram messages to improve readability and highlight important information.
 - When importing the datetime module, make sure to import the specific classes you need (e.g., `from datetime import datetime, timezone`) rather than importing the entire module (e.g., `import datetime`). This avoids errors like `datetime.utcnow()` vs `datetime.datetime.utcnow()`.
 - When using timezone information with datetime, remember to import the timezone class explicitly: `from datetime import timezone`.
+- When implementing error handling in AI agents, categorize errors by type (quota, timeout, content filter) for more specific user feedback.
+- For quota errors with OpenAI API, implement a fallback mechanism to switch to alternative models automatically.
+- When working with multiple model providers (OpenAI, Anthropic), use a prefix convention (e.g., 'openai:', 'anthropic:') to clearly identify the provider.
+- Add user commands to switch between models (/switch_model) and set fallback models (/set_fallback) for better user control.
+- Implement a /help command that lists all available commands with descriptions for better user experience.
+- Add a /models command to show users which models are currently active (primary and fallback).
+- When handling API errors, provide specific, helpful messages that guide users on what actions they can take.
+- For timeout errors, suggest that users break down complex questions into smaller parts.
+- For content filter errors, explain that the question violates content policies and suggest rephrasing.
+- Use try-except blocks with specific exception types rather than catching all exceptions generically when possible.
+- Log different error types with appropriate severity levels (warning for quota issues, error for other failures).
 
 ## Cursor learned
 
@@ -246,16 +257,22 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 [X] Test document upload and processing
 [X] Test conversation state management during document operations
 
+### Multi-Model Support and Error Handling
+[X] Add support for Anthropic Claude models
+[X] Implement model provider prefix system (openai:, anthropic:)
+[X] Update agent initialization to handle different model providers
+[X] Add /switch_model command to change primary model
+[X] Add /set_fallback command to set backup model
+[X] Add /models command to display current models in use
+[X] Enhance error handling with specific error types (quota, timeout, content filter)
+[X] Improve error messages with helpful suggestions for users
+[X] Update help command to include new model-related commands
+[X] Test fallback mechanism with quota errors
+[X] Update documentation in .cursorrules
+
 ### Next Steps
 - Consider adding database indexes for performance optimization
-- Add database connection pooling for better resource management
-- Implement database backup and restore functionality
-- Consider adding more advanced PostgreSQL features (full-text search, JSON storage)
-- Explore more advanced features of Pydantic AI (structured responses, tools)
-- Improve error handling and monitoring
-- Consider adding more Telegram bot commands
-- Implement streaming responses using the stream_response method
-- Add support for more document formats (PDF, DOCX, etc.)
-- Implement document categorization and tagging
-- Add user-specific document collections
-- Implement document versioning
+- Add support for more model providers (e.g., Mistral, Llama)
+- Implement user preferences for default models
+- Add usage tracking for different models
+- Consider implementing a rate limiting system to prevent quota errors
