@@ -11,21 +11,25 @@ from sqlalchemy.future import select
 import asyncpg
 import openai
 from pgvector.sqlalchemy import Vector
+from contextlib import contextmanager
+
+# יבוא הגדרות מקובץ config
+from src.core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT
 
 # הגדרת פרויקט logfire מראש
 if 'LOGFIRE_PROJECT' not in os.environ:
-    os.environ['LOGFIRE_PROJECT'] = 'slavalabovkin1223/newtest'
+    os.environ['LOGFIRE_PROJECT'] = LOGFIRE_PROJECT
 
 import logfire
 # נסיון להגדיר את ה-PydanticPlugin אם הוא זמין
 try:
     logfire.configure(
-        token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7',
+        token=LOGFIRE_API_KEY,
         pydantic_plugin=logfire.PydanticPlugin(record='all')
     )
 except (AttributeError, ImportError):
     # אם ה-PydanticPlugin לא זמין, נגדיר רק את הטוקן
-    logfire.configure(token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7')
+    logfire.configure(token=LOGFIRE_API_KEY)
 
 from src.core.config import DATABASE_URL
 from src.database.models import Base, User, Conversation, Message, Document, DocumentChunk
@@ -480,6 +484,34 @@ class Database:
             self.engine.dispose()
             if self.async_engine:
                 await self.async_engine.dispose()
+
+    @contextmanager
+    def Session(self):
+        """
+        מנהל הקשר לשימוש בסשן
+        """
+        if self.engine is None:
+            self.init_db()
+        
+        session = self.SessionLocal()
+        try:
+            yield session
+            session.commit()
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+    
+    async def get_session(self):
+        """
+        מחזיר אובייקט סשן אסינכרוני לשימוש עם async with
+        """
+        if self.async_engine is None:
+            self.init_db()
+        
+        # מחזיר את האובייקט AsyncSession ישירות
+        return self.AsyncSession()
 
 # יצירת מופע גלובלי של Database
 db = Database() 

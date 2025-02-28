@@ -276,3 +276,37 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Implement user preferences for default models
 - Add usage tracking for different models
 - Consider implementing a rate limiting system to prevent quota errors
+
+### Admin Dashboard Development
+[ ] Design admin dashboard architecture
+[ ] Create admin command handlers in telegram_bot.py
+[ ] Implement user management features (list, block, unblock users)
+[ ] Add system statistics and monitoring features
+[ ] Implement document management for admins
+[ ] Add model usage analytics
+[ ] Add configuration management through admin commands
+[ ] Implement access control and permissions
+[ ] Add admin notification system
+[ ] Create comprehensive admin help documentation
+
+### WooCommerce Dashboard Development
+[X] Create database models for WooCommerce integration (store, products, orders, customers)
+[X] Implement store connection process with API key authentication
+[X] Create basic dashboard UI with inline keyboard buttons
+[X] Add store statistics display functionality
+[X] Implement order management features
+[X] Add product management capabilities
+[X] Create customer management interface
+[X] Implement store settings and configuration
+[X] Organize project structure for WooCommerce integration
+[X] Update documentation with WooCommerce features
+
+## Project Organization Lessons
+
+- Keep database tools in a dedicated directory (tests/db_tools) for better organization
+- Use a single .env file for all configuration settings including Logfire
+- Avoid duplicate directories in the project structure
+- Remove unnecessary files like install_dependencies.py when using manual installation
+- Make sure README files are updated when project structure changes
+- When moving files, update all references to them in other files
+- Use consistent naming conventions for files and directories

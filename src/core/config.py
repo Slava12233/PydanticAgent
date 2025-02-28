@@ -29,6 +29,7 @@ DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST
 # הגדרות Logfire
 LOGFIRE_API_KEY = os.getenv("LOGFIRE_API_KEY")
 LOGFIRE_DATASET = os.getenv("LOGFIRE_DATASET", "telegram-bot")
+LOGFIRE_PROJECT = os.getenv("LOGFIRE_PROJECT", "slavalabovkin1223/newtest")
 
 # הגדרות כלליות
 DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
@@ -45,5 +46,19 @@ ALLOWED_COMMANDS = [
     ("add_document", "הוספת מסמך למערכת הידע"),
     ("search_documents", "חיפוש במסמכים"),
     ("list_documents", "הצגת רשימת המסמכים שלך"),
-    ("cancel", "ביטול פעולה נוכחית")
+    ("cancel", "ביטול פעולה נוכחית"),
+    # פקודות לניהול חנות ווקומרס
+    ("store", "דאשבורד ניהול חנות ווקומרס"),
+    ("connect_store", "חיבור חנות ווקומרס חדשה")
+]
+
+# פקודות מנהל
+ADMIN_COMMANDS = [
+    ("admin", "כניסה למצב ניהול (למנהלים בלבד)"),
+    ("admin_users", "ניהול משתמשים (רשימה, חסימה, ביטול חסימה)"),
+    ("admin_stats", "סטטיסטיקות מערכת מפורטות"),
+    ("admin_docs", "ניהול מסמכים (רשימה, מחיקה, עדכון)"),
+    ("admin_models", "ניהול מודלים (שינוי ברירות מחדל, הגבלות)"),
+    ("admin_config", "ניהול הגדרות מערכת"),
+    ("admin_notify", "שליחת התראות למשתמשים")
 ]

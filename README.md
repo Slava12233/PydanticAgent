@@ -19,6 +19,9 @@ A smart Telegram bot based on Pydantic AI and OpenAI GPT-4. The bot allows users
 - **Multi-Model Support** - Support for both OpenAI models (GPT-4, GPT-3.5-Turbo, GPT-4o) and Anthropic models (Claude-3-Opus, Claude-3-Sonnet)
 - **Fallback Mechanism** - Automatic fallback to alternative models in case of API quota issues
 - **Advanced Error Handling** - Specific error messages for different types of errors (quota, timeout, content filter)
+- **User Role Management** - Support for different user roles (ADMIN, USER, BLOCKED) for access control
+- **WooCommerce Dashboard** - Built-in dashboard for managing WooCommerce stores directly from Telegram
+- **DASHBOARD** - ממשק מובנה לניהול חנויות ווקומרס ישירות מטלגרם
 
 ## 🛠️ Installation
 
@@ -306,6 +309,14 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 If you have any questions or suggestions, don't hesitate to reach out!
 
+## 🧪 הרצת בדיקות
+
+כדי להריץ את כל הבדיקות, השתמש בפקודה:
+
+```bash
+python tests/run_tests.py
+```
+
 ---
 
 # בוט טלגרם מבוסס Pydantic AI
@@ -329,6 +340,8 @@ If you have any questions or suggestions, don't hesitate to reach out!
 - **מודלים רבים תמיכה** - תמיכה במודלים של OpenAI (GPT-4, GPT-3.5-Turbo, GPT-4o) ומודלים של Anthropic (Claude-3-Opus, Claude-3-Sonnet)
 - **מסגרת מסגרת** - מסגרת מסגרת למניעת בעיות מסגרת
 - **הטיפול המשופר** - הטיפול המשופר בשגיאות ספציפיות לסוגים שונים של שגיאות (מסגרת, זמן קצוב, מסגרת מסגרת)
+- **ניהול משתמשים** - תמיכה במשתמשים שונים (ADMIN, USER, BLOCKED) לשליטה על מניעת גישה
+- **דאשבורד ווקומרס** - ממשק מובנה לניהול חנויות ווקומרס ישירות מטלגרם
 
 ## 🛠️ התקנה
 
@@ -515,31 +528,31 @@ PydanticAgent/
 ניתן להוסיף מסמכים למערכת ה-RAG במספר דרכים:
 
 1. **באמצעות בוט הטלגרם**:
-   - שלח את הפקודה `/add_document` לבוט
-   - העלה קובץ טקסט (.txt)
-   - ספק כותרת למסמך
+   - Send the `/add_document` command to the bot
+   - Upload a text file (.txt)
+   - Provide a title for the document
 
 2. **באמצעות כלי שורת הפקודה**:
    ```bash
-   # הוספת מסמך מקובץ
-   python -m src.tools.document_manager add path/to/file.txt --title "כותרת המסמך"
+   # Add a document from a file
+   python -m src.tools.document_manager add path/to/file.txt --title "Document Title"
    
-   # הוספת תוכן ישירות
-   python -m src.tools.document_manager add-content "כותרת המסמך" "זהו תוכן המסמך"
+   # Add content directly
+   python -m src.tools.document_manager add-content "Document Title" "This is the content of the document"
    
-   # הוספת תוכן מקובץ
-   python -m src.tools.document_manager add-content "כותרת המסמך" path/to/file.txt --from-file
+   # Add content from a file
+   python -m src.tools.document_manager add-content "Document Title" path/to/file.txt --from-file
    ```
 
 #### חיפוש במסמכים
 
 1. **באמצעות בוט הטלגרם**:
-   - שלח את הפקודה `/search_documents` לבוט
-   - הזן את שאילתת החיפוש שלך
+   - Send the `/search_documents` command to the bot
+   - Enter your search query
 
 2. **באמצעות כלי שורת הפקודה**:
    ```bash
-   python -m src.tools.document_manager search "שאילתת החיפוש שלך"
+   python -m src.tools.document_manager search "your search query"
    ```
 
 #### רשימת מסמכים
@@ -616,33 +629,12 @@ python -m src.database.test_database
 
 אם יש לך שאלות או הצעות, אל תהסס ליצור קשר!
 
-## 🤖 מודלים נתמכים
+## 🧪 הרצת בדיקות
 
-הבוט תומך במודלים הבאים:
+כדי להריץ את כל הבדיקות, השתמש בפקודה:
 
-### מודלים של OpenAI
-- `gpt-4` - מודל הכי מוצלח למשימות מורכבות
-- `gpt-4o` - גרסה מומשטת של GPT-4
-- `gpt-3.5-turbo` - מודל מהיר יותר וזול יותר
-
-### מודלים של Anthropic
-- `claude-3-opus` - מודל הכי מוצלח של Anthropic
-- `claude-3-sonnet` - מודל משתנה למשימות רבות
-
-כדי להחליף מודלים, השתמש בפקודה `/switch_model` והזן את שם המודל:
-```
-/switch_model gpt-4
-/switch_model claude-3-sonnet
-```
-
-כדי להגדיר מודל משנה (מודל שמשמש כאשר המודל הראשי נפגע מבעיות מסגרת):
-```
-/set_fallback gpt-3.5-turbo
-```
-
-כדי לראות איזה מודלים משתמשים כעת:
-```
-/models
+```bash
+python tests/run_tests.py
 ```
 
 </div> 

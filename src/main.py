@@ -3,6 +3,12 @@ import logging
 import os
 import sys
 
+# הוספת תיקיית הפרויקט ל-PYTHONPATH
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
+
+# יבוא הגדרות מקובץ config
+from src.core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT, LOGFIRE_DATASET
+
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -12,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Configure logfire to suppress warnings and set project
 os.environ['LOGFIRE_IGNORE_NO_CONFIG'] = '1'
-os.environ['LOGFIRE_PROJECT'] = 'slavalabovkin1223/newtest'
+os.environ['LOGFIRE_PROJECT'] = LOGFIRE_PROJECT
 
 # Configure and initialize Logfire for monitoring
 try:
@@ -20,12 +26,12 @@ try:
     # נסיון להגדיר את ה-PydanticPlugin אם הוא זמין
     try:
         logfire.configure(
-            token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7',
+            token=LOGFIRE_API_KEY,
             pydantic_plugin=logfire.PydanticPlugin(record='all')
         )
     except (AttributeError, ImportError):
         # אם ה-PydanticPlugin לא זמין, נגדיר רק את הטוקן
-        logfire.configure(token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7')
+        logfire.configure(token=LOGFIRE_API_KEY)
     
     logfire_available = True
     logger.info("Logfire initialized successfully")

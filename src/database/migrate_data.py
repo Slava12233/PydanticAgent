@@ -96,23 +96,75 @@ def migrate_data():
         session.close()
         db.close()
 
+def run_migrations():
+    """
+    הפעלת כל המיגרציות הנדרשות
+    """
+    # יבוא מיגרציות
+    from src.database.migrations.create_tables import upgrade as create_tables
+    from src.database.migrations.add_user_role import upgrade as add_user_role
+    from src.database.migrations.add_woocommerce_tables import upgrade as add_woocommerce_tables
+    
+    # הפעלת המיגרציות לפי הסדר
+    try:
+        # יצירת טבלאות בסיסיות
+        create_tables()
+        
+        # הוספת שדה תפקיד למשתמשים
+        add_user_role()
+        
+        # הוספת טבלאות ווקומרס
+        add_woocommerce_tables()
+        
+        logger.info("כל המיגרציות הושלמו בהצלחה")
+    except Exception as e:
+        logger.error(f"שגיאה בהפעלת מיגרציות: {str(e)}")
+        raise
+
+def print_db_info():
+    """
+    הצגת מידע על מסד הנתונים
+    """
+    try:
+        with db.Session() as session:
+            # ספירת משתמשים
+            from src.database.models import User, UserRole
+            user_count = session.query(User).count()
+            admin_count = session.query(User).filter(User.role == UserRole.ADMIN).count()
+            
+            # ספירת מסמכים
+            from src.database.models import Document
+            doc_count = session.query(Document).count()
+            
+            # ספירת הודעות
+            from src.database.models import Message
+            message_count = session.query(Message).count()
+            
+            print("\n===== מידע על מסד הנתונים =====")
+            print(f"סה\"כ משתמשים: {user_count}")
+            print(f"מנהלים: {admin_count}")
+            print(f"סה\"כ מסמכים: {doc_count}")
+            print(f"סה\"כ הודעות: {message_count}")
+            print("================================\n")
+            
+    except Exception as e:
+        logger.error(f"שגיאה בהצגת מידע על מסד הנתונים: {str(e)}")
+
 def main():
     """פונקציה ראשית"""
-    parser = argparse.ArgumentParser(description='העברת נתונים מהמבנה הישן למבנה החדש')
-    parser.add_argument('--force', action='store_true', help='כפיית העברת נתונים גם אם הטבלה הישנה לא נמצאה')
-    
-    args = parser.parse_args()
-    
-    if args.force:
-        print("מעביר נתונים בכפייה...")
-        migrate_data()
-    else:
-        # בדיקה אם הטבלה הישנה קיימת
-        if check_old_table_exists():
-            print("נמצאה טבלה ישנה. מעביר נתונים...")
-            migrate_data()
-        else:
-            print("הטבלה הישנה לא נמצאה. אין צורך בהעברת נתונים.")
+    try:
+        # אתחול מסד הנתונים
+        db.init_db()
+        
+        # הפעלת מיגרציות
+        run_migrations()
+        
+        # הצגת מידע על מסד הנתונים
+        print_db_info()
+        
+    except Exception as e:
+        logger.error(f"שגיאה: {str(e)}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main() 

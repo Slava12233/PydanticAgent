@@ -13,37 +13,62 @@ from telegram.ext import (
     ContextTypes,
     filters,
     Defaults,
-    ConversationHandler
+    ConversationHandler,
+    CallbackQueryHandler
 )
 import httpx
 
 # Import from our module structure
-from src.core.config import TELEGRAM_TOKEN, ALLOWED_COMMANDS
+from src.core.config import TELEGRAM_TOKEN, ALLOWED_COMMANDS, ADMIN_COMMANDS, LOGFIRE_API_KEY, LOGFIRE_PROJECT
 # Import the new database module
 from src.database.database import db
 from src.database.rag_utils import add_document_from_file, search_documents
 from src.agents.telegram_agent import TelegramAgent
 # Import the new logger module
 from src.utils.logger import setup_logger, log_exception, log_database_operation, log_telegram_message
+from src.handlers.admin_handler import (
+    handle_admin_command, 
+    handle_admin_users, 
+    handle_admin_stats, 
+    handle_admin_docs, 
+    handle_admin_models, 
+    handle_admin_config, 
+    handle_admin_notify,
+    handle_admin_callback,
+    process_admin_action
+)
+from src.handlers.store_handler import (
+    handle_store_dashboard,
+    handle_connect_store_start,
+    handle_store_url,
+    handle_consumer_key,
+    handle_consumer_secret,
+    handle_confirmation,
+    handle_store_callback,
+    WAITING_FOR_STORE_URL,
+    WAITING_FOR_CONSUMER_KEY,
+    WAITING_FOR_CONSUMER_SECRET,
+    WAITING_FOR_CONFIRMATION
+)
 
 # Configure logging
 logger = setup_logger('telegram_bot')
 
 # הגדרת פרויקט logfire מראש
 if 'LOGFIRE_PROJECT' not in os.environ:
-    os.environ['LOGFIRE_PROJECT'] = 'slavalabovkin1223/newtest'
+    os.environ['LOGFIRE_PROJECT'] = LOGFIRE_PROJECT
 
 # Configure and initialize Logfire for monitoring
 import logfire
 # נסיון להגדיר את ה-PydanticPlugin אם הוא זמין
 try:
     logfire.configure(
-        token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7',
+        token=LOGFIRE_API_KEY,
         pydantic_plugin=logfire.PydanticPlugin(record='all')
     )
 except (AttributeError, ImportError):
     # אם ה-PydanticPlugin לא זמין, נגדיר רק את הטוקן
-    logfire.configure(token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7')
+    logfire.configure(token=LOGFIRE_API_KEY)
 # הגבלת ניטור HTTP לכותרות בלבד ללא תוכן הבקשה
 logfire.instrument_httpx(capture_headers=True, capture_body=False)
 
@@ -85,27 +110,44 @@ class TelegramBot:
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /help command."""
-        help_text = "הפקודות הזמינות:\n\n"
-        for command, description in ALLOWED_COMMANDS:
-            help_text += f"/{command} - {description}\n"
-        
-        # הוספת מידע על פקודות RAG
-        help_text += "\nפקודות למערכת מסמכים (RAG):\n"
-        help_text += "/add_document - הוספת מסמך למערכת הידע\n"
-        help_text += "/search_documents - חיפוש במסמכים\n"
-        help_text += "/list_documents - הצגת רשימת המסמכים שלך\n"
-        
-        # הוספת מידע על סוגי קבצים נתמכים
-        help_text += "\nסוגי קבצים נתמכים למערכת הידע:\n"
-        help_text += "📄 מסמכים: PDF, Word (DOCX)\n"
-        help_text += "📊 גיליונות: Excel (XLSX)\n"
-        help_text += "📑 מצגות: PowerPoint (PPTX)\n"
-        help_text += "🌐 אינטרנט: HTML, HTM\n"
-        help_text += "📝 טקסט: TXT, MD, JSON, XML, CSV\n"
+        user = update.effective_user
         
         # Log the help command
-        logfire.info('command_help', user_id=update.effective_user.id)
-        await update.message.reply_text(help_text)
+        logfire.info('command_help', user_id=user.id, username=user.username)
+        
+        # בניית רשימת הפקודות הזמינות
+        commands_list = "\n".join([f"/{cmd} - {desc}" for cmd, desc in ALLOWED_COMMANDS])
+        
+        # בדיקה אם המשתמש הוא מנהל
+        is_admin_user = False
+        session = await db.get_session()
+        try:
+            from src.handlers.admin_handler import is_admin
+            is_admin_user = await is_admin(user.id, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+        
+        # הוספת פקודות מנהל אם המשתמש הוא מנהל
+        if is_admin_user:
+            admin_commands_list = "\n".join([f"/{cmd} - {desc}" for cmd, desc in ADMIN_COMMANDS])
+            commands_list += "\n\n🔐 פקודות מנהל:\n" + admin_commands_list
+        
+        help_message = (
+            "🤖 *עזרה ורשימת פקודות*\n\n"
+            "אני בוט AI חכם שיכול לעזור לך בכל נושא. פשוט שלח לי הודעה ואענה לך!\n\n"
+            "📋 *פקודות זמינות:*\n"
+            f"{commands_list}\n\n"
+            "📚 *מערכת המסמכים החכמה:*\n"
+            "אני תומך במגוון סוגי קבצים כולל PDF, Word, Excel, PowerPoint, HTML וטקסט.\n"
+            "השתמש בפקודה /add_document כדי להעלות מסמך חדש.\n"
+            "לאחר העלאת מסמכים, תוכל לחפש בהם באמצעות הפקודה /search_documents."
+        )
+        
+        await update.message.reply_text(help_message, parse_mode="Markdown")
 
     async def clear(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /clear command."""
@@ -617,6 +659,21 @@ class TelegramBot:
             
             # Create a Logfire span to track the entire message handling process
             with logfire.span('handle_telegram_message', user_id=user_id, message_length=len(message_text)):
+                # בדיקה אם זו פעולת מנהל שדורשת קלט נוסף
+                session = await db.get_session()
+                try:
+                    from src.handlers.admin_handler import process_admin_action
+                    admin_action_processed = await process_admin_action(update, context, session)
+                    if admin_action_processed:
+                        self.typing_status[user_id] = False
+                        await session.commit()
+                        return
+                except Exception as e:
+                    logger.error(f"Error processing admin action: {str(e)}")
+                    await session.rollback()
+                finally:
+                    await session.close()
+                
                 # Get chat history
                 try:
                     history = db.get_chat_history(user_id)
@@ -897,6 +954,18 @@ class TelegramBot:
                 fallbacks=[CommandHandler("cancel", self.cancel_conversation)],
             )
             
+            # הגדרת ConversationHandler לחיבור חנות ווקומרס
+            connect_store_handler = ConversationHandler(
+                entry_points=[CommandHandler("connect_store", self.connect_store_wrapper)],
+                states={
+                    WAITING_FOR_STORE_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.store_url_wrapper)],
+                    WAITING_FOR_CONSUMER_KEY: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.consumer_key_wrapper)],
+                    WAITING_FOR_CONSUMER_SECRET: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.consumer_secret_wrapper)],
+                    WAITING_FOR_CONFIRMATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.confirmation_wrapper)],
+                },
+                fallbacks=[CommandHandler("cancel", self.cancel_conversation)],
+            )
+            
             # Add handlers
             application.add_handler(CommandHandler("start", self.start))
             application.add_handler(CommandHandler("help", self.help))
@@ -905,6 +974,23 @@ class TelegramBot:
             application.add_handler(add_document_handler)
             application.add_handler(search_documents_handler)
             application.add_handler(CommandHandler("list_documents", self.list_documents))
+            
+            # הוספת פקודות מנהל
+            application.add_handler(CommandHandler("admin", self.admin_command_wrapper))
+            application.add_handler(CommandHandler("admin_users", self.admin_users_wrapper))
+            application.add_handler(CommandHandler("admin_stats", self.admin_stats_wrapper))
+            application.add_handler(CommandHandler("admin_docs", self.admin_docs_wrapper))
+            application.add_handler(CommandHandler("admin_models", self.admin_models_wrapper))
+            application.add_handler(CommandHandler("admin_config", self.admin_config_wrapper))
+            application.add_handler(CommandHandler("admin_notify", self.admin_notify_wrapper))
+            
+            # הוספת פקודות ניהול חנות
+            application.add_handler(CommandHandler("store", self.store_dashboard_wrapper))
+            application.add_handler(connect_store_handler)
+            
+            # הוספת מטפל לחיצות על כפתורים
+            application.add_handler(CallbackQueryHandler(self.callback_handler))
+            
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
             # Log successful initialization
@@ -933,6 +1019,170 @@ class TelegramBot:
             logfire.error('telegram_bot_startup_error', error=str(e))
             logger.error(f"Error starting bot: {e}")
             raise 
+
+    # פונקציות מעטפת למנהל ולחנות - הוספה מחדש כדי לוודא שהן מוגדרות כראוי
+    
+    # מעטפות לפונקציות ניהול מנהל
+    
+    async def admin_command_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin"""
+        session = await db.get_session()
+        try:
+            await handle_admin_command(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def admin_users_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin_users"""
+        session = await db.get_session()
+        try:
+            await handle_admin_users(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def admin_stats_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin_stats"""
+        session = await db.get_session()
+        try:
+            await handle_admin_stats(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def admin_docs_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin_docs"""
+        session = await db.get_session()
+        try:
+            await handle_admin_docs(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def admin_models_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin_models"""
+        session = await db.get_session()
+        try:
+            await handle_admin_models(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def admin_config_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin_config"""
+        session = await db.get_session()
+        try:
+            await handle_admin_config(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def admin_notify_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /admin_notify"""
+        session = await db.get_session()
+        try:
+            await handle_admin_notify(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מטפל בלחיצות על כפתורים"""
+        query = update.callback_query
+        callback_data = query.data
+        
+        # ניתוב לפי סוג הכפתור
+        if callback_data.startswith("admin_") or callback_data in ["admin", "list_users", "block_user", "unblock_user", "grant_admin", "revoke_admin"]:
+            # כפתורים של מערכת הניהול
+            session = await db.get_session()
+            try:
+                await handle_admin_callback(update, context, session)
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                raise e
+            finally:
+                await session.close()
+        elif callback_data.startswith("store_") or callback_data in ["connect_store", "store_info", "back_to_store"]:
+            # כפתורים של מערכת ניהול החנות
+            session = await db.get_session()
+            try:
+                await handle_store_callback(update, context, session)
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                raise e
+            finally:
+                await session.close()
+        else:
+            # כפתורים לא מוכרים
+            await query.answer("פעולה לא מוכרת")
+            await query.edit_message_text("פעולה לא מוכרת או לא נתמכת כרגע.")
+    
+    # מעטפות לפונקציות ניהול חנות
+    
+    async def store_dashboard_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """מעטפת לפקודת /store"""
+        session = await db.get_session()
+        try:
+            await handle_store_dashboard(update, context, session)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+    
+    async def connect_store_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """מעטפת לפקודת /connect_store"""
+        return await handle_connect_store_start(update, context)
+    
+    async def store_url_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """מעטפת לקבלת כתובת החנות"""
+        return await handle_store_url(update, context)
+    
+    async def consumer_key_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """מעטפת לקבלת מפתח צרכן"""
+        return await handle_consumer_key(update, context)
+    
+    async def consumer_secret_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """מעטפת לקבלת סוד צרכן"""
+        return await handle_consumer_secret(update, context)
+    
+    async def confirmation_wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """מעטפת לקבלת אישור"""
+        session = await db.get_session()
+        try:
+            result = await handle_confirmation(update, context, session)
+            await session.commit()
+            return result
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
 
 # הוספת פונקציית עזר לעריכת הודעות עם טיפול בשגיאות פרסור
 async def safe_edit_message(message, text, parse_mode=None, user_id=None):
