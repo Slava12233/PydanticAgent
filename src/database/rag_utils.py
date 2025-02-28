@@ -8,20 +8,25 @@ from typing import List, Dict, Any, Optional
 import argparse
 from datetime import datetime
 import json
+import logging
 
 # הוספת תיקיית הפרויקט לנתיב החיפוש
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.database.database import db
+from src.database.file_parsers import FileParser
+
+# הגדרת לוגר
+logger = logging.getLogger(__name__)
 
 async def add_document_from_file(file_path: str, title: Optional[str] = None, 
                                source: str = "file", metadata: Optional[Dict[str, Any]] = None,
                                chunk_size: int = 1000) -> int:
     """
-    הוספת מסמך למערכת RAG מקובץ טקסט
+    הוספת מסמך למערכת RAG מקובץ
     
     Args:
-        file_path: נתיב לקובץ הטקסט
+        file_path: נתיב לקובץ
         title: כותרת המסמך (ברירת מחדל: שם הקובץ)
         source: מקור המסמך (ברירת מחדל: "file")
         metadata: מטא-דאטה נוסף למסמך
@@ -34,35 +39,37 @@ async def add_document_from_file(file_path: str, title: Optional[str] = None,
     if db.engine is None:
         db.init_db()
     
-    # קריאת תוכן הקובץ
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # שימוש בשם הקובץ כברירת מחדל לכותרת
-    if title is None:
-        title = os.path.basename(file_path)
-    
-    # הוספת מידע על הקובץ למטא-דאטה
-    file_metadata = {
-        'filename': os.path.basename(file_path),
-        'path': os.path.abspath(file_path),
-        'size_bytes': os.path.getsize(file_path),
-        'added_at': datetime.utcnow().isoformat()
-    }
-    
-    # שילוב המטא-דאטה שסופק עם המטא-דאטה של הקובץ
-    if metadata:
-        file_metadata.update(metadata)
-    
-    # הוספת המסמך למערכת RAG
-    doc_id = await db.add_document(
-        title=title,
-        content=content,
-        source=source,
-        metadata=file_metadata
-    )
-    
-    return doc_id
+    try:
+        # פרסור הקובץ באמצעות המודול החדש
+        logger.info(f"מתחיל לפרסר קובץ: {file_path}")
+        content, file_metadata = FileParser.parse_file(file_path)
+        logger.info(f"פרסור הקובץ הושלם בהצלחה. אורך התוכן: {len(content)} תווים")
+        
+        # שימוש בשם הקובץ כברירת מחדל לכותרת
+        if title is None:
+            title = os.path.basename(file_path)
+        
+        # הוספת מידע על הקובץ למטא-דאטה
+        file_metadata['added_at'] = datetime.utcnow().isoformat()
+        
+        # שילוב המטא-דאטה שסופק עם המטא-דאטה של הקובץ
+        if metadata:
+            file_metadata.update(metadata)
+        
+        # הוספת המסמך למערכת RAG
+        doc_id = await db.add_document(
+            title=title,
+            content=content,
+            source=source,
+            metadata=file_metadata
+        )
+        
+        logger.info(f"המסמך נוסף בהצלחה למערכת RAG. מזהה: {doc_id}")
+        return doc_id
+        
+    except Exception as e:
+        logger.error(f"שגיאה בהוספת מסמך למערכת RAG: {str(e)}")
+        raise
 
 async def search_documents(query: str, limit: int = 5, min_similarity: float = 0.0) -> List[Dict[str, Any]]:
     """
@@ -92,7 +99,7 @@ async def main():
     
     # פקודה להוספת מסמך
     add_parser = subparsers.add_parser('add', help='הוספת מסמך למערכת RAG')
-    add_parser.add_argument('file', help='נתיב לקובץ טקסט להוספה')
+    add_parser.add_argument('file', help='נתיב לקובץ להוספה')
     add_parser.add_argument('--title', help='כותרת המסמך (ברירת מחדל: שם הקובץ)')
     add_parser.add_argument('--source', default='file', help='מקור המסמך (ברירת מחדל: file)')
     add_parser.add_argument('--metadata', help='מטא-דאטה בפורמט JSON')
@@ -102,6 +109,7 @@ async def main():
     search_parser = subparsers.add_parser('search', help='חיפוש במסמכים')
     search_parser.add_argument('query', help='שאילתת החיפוש')
     search_parser.add_argument('--limit', type=int, default=5, help='מספר התוצאות המקסימלי')
+    search_parser.add_argument('--min-similarity', type=float, default=0.0, help='סף מינימלי לדמיון')
     
     args = parser.parse_args()
     
@@ -116,24 +124,37 @@ async def main():
                 return 1
         
         # הוספת המסמך
-        doc_id = await add_document_from_file(
-            file_path=args.file,
-            title=args.title,
-            source=args.source,
-            metadata=metadata
-        )
-        
-        print(f"המסמך נוסף בהצלחה! מזהה: {doc_id}")
+        try:
+            doc_id = await add_document_from_file(
+                file_path=args.file,
+                title=args.title,
+                source=args.source,
+                metadata=metadata,
+                chunk_size=args.chunk_size
+            )
+            
+            print(f"המסמך נוסף בהצלחה! מזהה: {doc_id}")
+        except Exception as e:
+            print(f"שגיאה בהוספת המסמך: {str(e)}")
+            return 1
         
     elif args.command == 'search':
         # חיפוש במסמכים
-        results = await search_documents(args.query, args.limit)
-        
-        print(f"נמצאו {len(results)} תוצאות עבור '{args.query}':")
-        for i, result in enumerate(results, 1):
-            print(f"\n--- תוצאה {i} (התאמה: {result['similarity']:.2f}) ---")
-            print(f"מסמך: {result['title']} (מקור: {result['source']})")
-            print(f"תוכן: {result['content'][:200]}...")
+        try:
+            results = await search_documents(
+                query=args.query, 
+                limit=args.limit,
+                min_similarity=args.min_similarity
+            )
+            
+            print(f"נמצאו {len(results)} תוצאות עבור '{args.query}':")
+            for i, result in enumerate(results, 1):
+                print(f"\n--- תוצאה {i} (התאמה: {result['similarity']:.2f}) ---")
+                print(f"מסמך: {result['title']} (מקור: {result['source']})")
+                print(f"תוכן: {result['content'][:200]}...")
+        except Exception as e:
+            print(f"שגיאה בחיפוש: {str(e)}")
+            return 1
     
     else:
         parser.print_help()

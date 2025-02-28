@@ -11,7 +11,21 @@ from sqlalchemy.future import select
 import asyncpg
 import openai
 from pgvector.sqlalchemy import Vector
+
+# הגדרת פרויקט logfire מראש
+if 'LOGFIRE_PROJECT' not in os.environ:
+    os.environ['LOGFIRE_PROJECT'] = 'slavalabovkin1223/newtest'
+
 import logfire
+# נסיון להגדיר את ה-PydanticPlugin אם הוא זמין
+try:
+    logfire.configure(
+        token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7',
+        pydantic_plugin=logfire.PydanticPlugin(record='all')
+    )
+except (AttributeError, ImportError):
+    # אם ה-PydanticPlugin לא זמין, נגדיר רק את הטוקן
+    logfire.configure(token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7')
 
 from src.core.config import DATABASE_URL
 from src.database.models import Base, User, Conversation, Message, Document, DocumentChunk
@@ -269,17 +283,41 @@ class Database:
     async def create_embedding(self, text: str, model: str = "text-embedding-3-small") -> List[float]:
         """יצירת embedding לטקסט באמצעות OpenAI API"""
         with logfire.span("creating_embedding", text_length=len(text)):
-            try:
-                # שימוש בגרסה הסינכרונית של ה-API
-                response = openai.embeddings.create(
-                    input=text,
-                    model=model
-                )
-                return response.data[0].embedding
-            except Exception as e:
-                logfire.error("embedding_creation_error", error=str(e))
-                # החזרת וקטור אפס במקרה של שגיאה
-                return [0.0] * 1536
+            max_retries = 5
+            retry_delay = 1.0  # שניה אחת בהתחלה
+            
+            for attempt in range(max_retries):
+                try:
+                    # שימוש בגרסה הסינכרונית של ה-API
+                    response = openai.embeddings.create(
+                        input=text,
+                        model=model
+                    )
+                    return response.data[0].embedding
+                except Exception as e:
+                    error_message = str(e).lower()
+                    
+                    # בדיקה אם זו שגיאת rate limit
+                    if "rate limit" in error_message or "429" in error_message:
+                        if attempt < max_retries - 1:  # אם זה לא הניסיון האחרון
+                            # לוג על הניסיון החוזר
+                            logfire.warning(
+                                "embedding_rate_limit", 
+                                attempt=attempt + 1, 
+                                max_retries=max_retries,
+                                retry_delay=retry_delay
+                            )
+                            
+                            # המתנה לפני הניסיון הבא עם הכפלת זמן ההמתנה בכל פעם (exponential backoff)
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 2  # הכפלת זמן ההמתנה לניסיון הבא
+                            continue
+                    
+                    # אם הגענו לכאן, זו שגיאה אחרת או שנגמרו הניסיונות
+                    logfire.error("embedding_creation_error", error=str(e), attempt=attempt + 1)
+                    
+                    # החזרת וקטור אפס במקרה של שגיאה
+                    return [0.0] * 1536
     
     async def add_document(self, title: str, content: str, source: str, metadata: dict = None) -> int:
         """הוספת מסמך למסד הנתונים"""

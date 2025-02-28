@@ -44,5 +44,6 @@ ALLOWED_COMMANDS = [
     # פקודות למערכת RAG
     ("add_document", "הוספת מסמך למערכת הידע"),
     ("search_documents", "חיפוש במסמכים"),
+    ("list_documents", "הצגת רשימת המסמכים שלך"),
     ("cancel", "ביטול פעולה נוכחית")
 ]
