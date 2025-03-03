@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+import signal
 
 # הוספת תיקיית הפרויקט ל-PYTHONPATH
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
@@ -53,11 +54,36 @@ async def main_async():
         # Initialize and run the Telegram bot
         bot = TelegramBot()
         await bot.run()
+        
+        # הוספת אירוע שימתין לסיום הבוט
+        stop_event = asyncio.Event()
+        
+        # הוספת מטפל לסיגנלים כדי לאפשר סגירה מסודרת
+        def signal_handler():
+            logger.info("Received stop signal")
+            stop_event.set()
+        
+        # רישום מטפל לסיגנלים
+        try:
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, signal_handler)
+        except NotImplementedError:
+            # Windows לא תומך ב-add_signal_handler
+            pass
+        
+        # המתנה לסיגנל סיום
+        await stop_event.wait()
+        
+        # סגירת הבוט בצורה מסודרת
+        if hasattr(bot, 'application'):
+            await bot.application.stop()
+            await bot.application.shutdown()
     except Exception as e:
         logger.error(f"Error in main_async: {e}")
     finally:
         # Close database connection
-        db.close()
+        await db.close()
 
 def main():
     """Main entry point for the application."""

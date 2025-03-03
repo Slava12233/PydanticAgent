@@ -98,3 +98,8 @@ coverage.xml
 
 # Telegram bot specific
 token.txt 
+
+# Backup
+.backup/
+
+

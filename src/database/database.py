@@ -12,6 +12,8 @@ import asyncpg
 import openai
 from pgvector.sqlalchemy import Vector
 from contextlib import contextmanager
+import logging
+import traceback
 
 # יבוא הגדרות מקובץ config
 from src.core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT
@@ -33,6 +35,9 @@ except (AttributeError, ImportError):
 
 from src.core.config import DATABASE_URL
 from src.database.models import Base, User, Conversation, Message, Document, DocumentChunk
+
+# הגדרת לוגר
+logger = logging.getLogger(__name__)
 
 class Database:
     """מחלקה לניהול מסד הנתונים והאינטראקציות איתו"""
@@ -215,31 +220,64 @@ class Database:
             # החזרת מזהי ההודעות
             return user_msg_id, assistant_msg_id
     
-    def get_chat_history(self, user_id: int, limit: int = 5) -> List[Dict[str, Any]]:
-        """קבלת היסטוריית השיחה הפעילה"""
+    def get_chat_history(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        קבלת היסטוריית השיחה הפעילה
+        
+        Args:
+            user_id: מזהה המשתמש בטלגרם
+            limit: מספר ההודעות המקסימלי לשליפה
+            
+        Returns:
+            רשימת הודעות בפורמט {message, response}
+        """
         with self.Session() as session:
-            # מציאת שיחה פעילה
-            conv_id = self.get_active_conversation(user_id)
-            
-            # שליפת הודעות מסודרות לפי זמן
-            messages = session.query(Message)\
-                .filter(Message.conversation_id == conv_id)\
-                .order_by(asc(Message.timestamp))\
-                .all()
-            
-            # ארגון הודעות לפורמט המתאים לסוכן
-            history = []
-            i = 0
-            while i < len(messages) - 1:
-                if messages[i].role == 'user' and messages[i+1].role == 'assistant':
-                    history.append({
-                        'message': messages[i].content,
-                        'response': messages[i+1].content
-                    })
-                i += 2
-            
-            # החזרת ההיסטוריה המוגבלת
-            return history[-limit:] if len(history) > limit else history
+            try:
+                # מציאת המשתמש לפי מזהה טלגרם
+                user = session.query(User).filter(User.id == user_id).first()
+                if not user:
+                    logger.warning(f"User {user_id} not found in database")
+                    return []
+                
+                # מציאת השיחה האחרונה של המשתמש
+                conv = session.query(Conversation)\
+                    .filter(Conversation.user_id == user.id)\
+                    .order_by(Conversation.updated_at.desc())\
+                    .first()
+                
+                if not conv:
+                    logger.warning(f"No active conversation found for user {user_id}")
+                    return []
+                
+                # שליפת הודעות מסודרות לפי זמן
+                messages = session.query(Message)\
+                    .filter(Message.conversation_id == conv.id)\
+                    .order_by(Message.timestamp.asc())\
+                    .all()
+                
+                # ארגון הודעות לפורמט המתאים לסוכן
+                history = []
+                i = 0
+                while i < len(messages) - 1:
+                    if messages[i].role == 'user' and i+1 < len(messages) and messages[i+1].role == 'assistant':
+                        history.append({
+                            'message': messages[i].content,
+                            'response': messages[i+1].content
+                        })
+                        i += 2
+                    else:
+                        # אם אין זוג מסודר, נוסיף רק את ההודעה הנוכחית
+                        history.append({
+                            'message': messages[i].content,
+                            'response': "" if i+1 >= len(messages) else messages[i+1].content
+                        })
+                        i += 1
+                
+                # החזרת ההיסטוריה המוגבלת
+                return history[-limit:] if len(history) > limit else history
+            except Exception as e:
+                logger.error(f"Error getting chat history: {e}")
+                return []
     
     def get_all_user_message_history(self, user_id: int) -> List[Dict[str, Any]]:
         """קבלת כל היסטוריית ההודעות של המשתמש (משיחות קודמות)"""
@@ -385,21 +423,82 @@ class Database:
                 print(f"נוצר embedding לשאילתה באורך: {len(query_embedding)}")
                 
                 async with self.AsyncSession() as session:
-                    # שאילתה פשוטה שמחזירה את כל הקטעים
-                    query_sql = text("""
-                    SELECT 
-                        dc.id, 
-                        dc.content, 
-                        d.title, 
-                        d.source,
-                        dc.embedding
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.document_id = d.id
-                    """)
-                    
-                    result = await session.execute(query_sql)
-                    rows = result.fetchall()
-                    print(f"נמצאו {len(rows)} קטעים במסד הנתונים")
+                    # בדיקה אם הטבלה document_chunks קיימת
+                    try:
+                        # שאילתה פשוטה שמחזירה את כל הקטעים
+                        query_sql = text("""
+                        SELECT 
+                            dc.id, 
+                            dc.content, 
+                            d.title, 
+                            d.source,
+                            dc.embedding
+                        FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        """)
+                        
+                        result = await session.execute(query_sql)
+                        rows = result.fetchall()
+                        print(f"נמצאו {len(rows)} קטעים במסד הנתונים")
+                    except Exception as e:
+                        print(f"שגיאה בשאילתת SQL: {str(e)}")
+                        # אם יש שגיאה, ננסה לבדוק אם הטבלאות קיימות
+                        check_tables_sql = text("""
+                        SELECT table_name 
+                        FROM information_schema.tables 
+                        WHERE table_schema = 'public'
+                        """)
+                        tables_result = await session.execute(check_tables_sql)
+                        tables = [row[0] for row in tables_result.fetchall()]
+                        print(f"טבלאות קיימות: {tables}")
+                        
+                        if 'documents' not in tables or 'document_chunks' not in tables:
+                            print("הטבלאות document_chunks או documents לא קיימות")
+                            return []
+                        
+                        # בדיקת מבנה הטבלה
+                        check_columns_sql = text("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'document_chunks'
+                        """)
+                        columns_result = await session.execute(check_columns_sql)
+                        columns = [row[0] for row in columns_result.fetchall()]
+                        print(f"עמודות בטבלת document_chunks: {columns}")
+                        
+                        # אם אין עמודת embedding, נחזיר רשימה ריקה
+                        if 'embedding' not in columns:
+                            print("עמודת embedding לא קיימת בטבלת document_chunks")
+                            return []
+                        
+                        # ננסה שאילתה אחרת שלא משתמשת בעמודות שאולי לא קיימות
+                        query_sql = text("""
+                        SELECT 
+                            dc.id, 
+                            dc.content, 
+                            d.title, 
+                            d.source
+                        FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        LIMIT :limit
+                        """)
+                        
+                        result = await session.execute(query_sql, {"limit": limit})
+                        rows = result.fetchall()
+                        print(f"נמצאו {len(rows)} קטעים במסד הנתונים (ללא embedding)")
+                        
+                        # נחזיר את התוצאות ללא חישוב דמיון
+                        return [
+                            {
+                                "id": row.id,
+                                "content": row.content,
+                                "title": row.title,
+                                "source": row.source,
+                                "similarity": 0,
+                                "similarity_percentage": 0
+                            }
+                            for row in rows
+                        ]
                     
                     # חישוב דמיון קוסינוס בקוד Python
                     chunks_with_similarity = []
@@ -416,26 +515,18 @@ class Database:
                                 "content": row.content,
                                 "title": row.title,
                                 "source": row.source,
-                                "similarity": similarity
+                                "similarity": similarity,
+                                "similarity_percentage": similarity * 100  # המרה לאחוזים
                             })
                     
-                    # מיון לפי דמיון והגבלה למספר התוצאות הרצוי
-                    chunks = sorted(chunks_with_similarity, key=lambda x: x["similarity"], reverse=True)[:limit]
+                    # מיון התוצאות לפי דמיון (מהגבוה לנמוך)
+                    sorted_chunks = sorted(chunks_with_similarity, key=lambda x: x["similarity"], reverse=True)
                     
-                    print(f"מוחזרים {len(chunks)} קטעים מתוך {len(chunks_with_similarity)} שנמצאו")
-                    
-                    # אם אין תוצאות, נחזיר לפחות את הקטעים הכי דומים (גם אם הדמיון נמוך)
-                    if not chunks and chunks_with_similarity:
-                        print("אין תוצאות מעל הסף, מחזיר את הקטעים הכי דומים")
-                        chunks = sorted(chunks_with_similarity, key=lambda x: x["similarity"], reverse=True)[:limit]
-                    
-                    logfire.info("rag_search_results", 
-                               query=query, 
-                               chunks_found=len(chunks))
-                    return chunks
+                    # החזרת מספר התוצאות המבוקש
+                    return sorted_chunks[:limit]
             except Exception as e:
-                print(f"שגיאה בחיפוש קטעים: {e}")
-                logfire.error("rag_search_error", error=str(e))
+                print(f"שגיאה כללית בחיפוש קטעים: {str(e)}")
+                logfire.error('search_relevant_chunks_error', error=str(e))
                 return []
     
     def _cosine_similarity(self, vec1, vec2):
@@ -512,6 +603,42 @@ class Database:
         
         # מחזיר את האובייקט AsyncSession ישירות
         return self.AsyncSession()
+
+    async def get_conversation_messages(self, conversation_id: int, limit: int = 10, session = None) -> List[Message]:
+        """
+        שליפת הודעות משיחה לפי מזהה השיחה
+        
+        Args:
+            conversation_id: מזהה השיחה
+            limit: מספר ההודעות המקסימלי לשליפה
+            session: סשן מסד נתונים (אופציונלי)
+            
+        Returns:
+            רשימת הודעות
+        """
+        if session is None:
+            session = await self.get_session()
+            close_session = True
+        else:
+            close_session = False
+        
+        try:
+            # שליפת ההודעות האחרונות מהשיחה בסדר כרונולוגי
+            query = select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at.asc())
+            
+            if limit:
+                query = query.limit(limit)
+            
+            result = await session.execute(query)
+            messages = result.scalars().all()
+            
+            return messages
+        except Exception as e:
+            logger.error(f"Error getting conversation messages: {e}")
+            return []
+        finally:
+            if close_session:
+                await session.close()
 
 # יצירת מופע גלובלי של Database
 db = Database() 

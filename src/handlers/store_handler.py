@@ -8,8 +8,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import random
 
-from src.database.models import User, UserRole
+from src.database.models import User, UserRole, WooCommerceStore
 from src.database.operations import get_user_by_telegram_id
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +26,54 @@ async def is_store_connected(user_id: int, session: AsyncSession) -> bool:
     """
     בדיקה האם המשתמש כבר חיבר חנות
     """
-    # בשלב זה נחזיר True כברירת מחדל לצורך בדיקה
-    # TODO: לממש בדיקה אמיתית מול מסד הנתונים
-    return True
+    # בדיקה אמיתית מול מסד הנתונים
+    result = await session.execute(
+        select(WooCommerceStore).where(
+            WooCommerceStore.user_id == user_id,
+            WooCommerceStore.is_active == True
+        )
+    )
+    
+    store = result.scalars().first()
+    return store is not None
 
 async def get_store_basic_data(user_id: int, session: AsyncSession) -> Dict[str, Any]:
     """
     קבלת נתונים בסיסיים מהחנות
     """
-    # בשלב זה נחזיר נתונים לדוגמה - בהמשך נממש שליפה אמיתית מה-API של ווקומרס
-    # TODO: לממש שליפת נתונים אמיתית מה-API של ווקומרס
+    # ניסיון לקבל נתונים אמיתיים מה-API של ווקומרס
+    try:
+        # קבלת פרטי החנות מהמסד נתונים
+        result = await session.execute(
+            select(WooCommerceStore).where(
+                WooCommerceStore.user_id == user_id,
+                WooCommerceStore.is_active == True
+            )
+        )
+        
+        store = result.scalars().first()
+        
+        if store:
+            # יצירת מופע של ה-API
+            from src.services.woocommerce.api import WooCommerceAPI
+            
+            woo_api = WooCommerceAPI(
+                store_url=store.store_url,
+                consumer_key=store.consumer_key,
+                consumer_secret=store.consumer_secret
+            )
+            
+            # ניסיון לקבל נתונים מהחנות
+            try:
+                store_info = await woo_api.get_store_info()
+                return store_info
+            except Exception as e:
+                logger.error(f"שגיאה בקבלת נתונים מה-API: {str(e)}")
+                # אם יש שגיאה, נחזיר נתונים לדוגמה
+    except Exception as e:
+        logger.error(f"שגיאה בקבלת פרטי החנות: {str(e)}")
+    
+    # אם לא הצלחנו לקבל נתונים אמיתיים, נחזיר נתונים לדוגמה
     return {
         "name": "החנות המדהימה שלי",
         "orders_today": 12,
@@ -86,8 +125,9 @@ async def handle_store_dashboard(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("📊 סטטיסטיקות מכירות", callback_data="store_stats")],
         [InlineKeyboardButton("📦 ניהול מוצרים", callback_data="store_products")],
         [InlineKeyboardButton("🛒 הזמנות אחרונות", callback_data="store_orders")],
-        [InlineKeyboardButton("💰 דוחות כספיים", callback_data="store_finance")],
         [InlineKeyboardButton("👥 ניהול לקוחות", callback_data="store_customers")],
+        [InlineKeyboardButton("📋 ניהול מלאי", callback_data="store_inventory")],
+        [InlineKeyboardButton("💰 דוחות כספיים", callback_data="store_finance")],
         [InlineKeyboardButton("🔔 התראות חנות", callback_data="store_alerts")],
         [InlineKeyboardButton("⚙️ הגדרות חיבור", callback_data="store_settings")]
     ]
@@ -103,6 +143,28 @@ async def handle_store_dashboard(update: Update, context: ContextTypes.DEFAULT_T
         for i, product in enumerate(store_data["popular_products"], 1):
             popular_products_text += f"  {i}. {product['name']} - {product['sales']} יחידות ({product['revenue']}₪)\n"
     
+    # בדיקה אם יש התראות חשובות
+    alerts_text = ""
+    if store_data.get("low_stock", 0) > 0:
+        alerts_text += f"⚠️ *התראות חשובות:*\n"
+        alerts_text += f"• {store_data['low_stock']} מוצרים במלאי נמוך\n"
+    
+    if store_data.get("pending_orders", 0) > 0:
+        if not alerts_text:
+            alerts_text += f"⚠️ *התראות חשובות:*\n"
+        alerts_text += f"• {store_data['pending_orders']} הזמנות ממתינות לטיפול\n"
+    
+    if alerts_text:
+        alerts_text += "\n"
+    
+    # הוספת טיפים לשיפור המכירות
+    tips_text = (
+        "💡 *טיפים לשיפור המכירות:*\n"
+        "• שקול להוסיף מבצעים למוצרים הפופולריים\n"
+        "• בדוק את המוצרים במלאי נמוך ושקול להזמין מלאי נוסף\n"
+        "• טפל בהזמנות הממתינות בהקדם\n\n"
+    )
+    
     await update.message.reply_text(
         f"🏪 *דאשבורד החנות שלך: {store_data['name']}*\n\n"
         f"📈 *סיכום מהיר:*\n"
@@ -113,7 +175,9 @@ async def handle_store_dashboard(update: Update, context: ContextTypes.DEFAULT_T
         f"• סה\"כ מוצרים: {store_data.get('total_products', 'לא זמין')}\n"
         f"• סה\"כ לקוחות: {store_data.get('total_customers', 'לא זמין')}\n"
         f"• הכנסות חודשיות: {store_data.get('monthly_revenue', 'לא זמין')}₪\n\n"
+        f"{alerts_text}"
         f"🔝 *מוצרים מובילים:*\n{popular_products_text}\n"
+        f"{tips_text}"
         f"בחר אפשרות לניהול החנות:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
@@ -543,6 +607,10 @@ async def handle_store_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_store_orders(update, context, session)
     elif callback_data == "store_products":
         await handle_store_products(update, context, session)
+    elif callback_data == "store_customers":
+        await handle_store_customers(update, context, session)
+    elif callback_data == "store_inventory":
+        await handle_store_inventory(update, context, session)
     elif callback_data == "back_to_store":
         # חזרה לדאשבורד הראשי
         await handle_store_dashboard(update, context, session)
@@ -553,4 +621,145 @@ async def handle_store_callback(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 חזרה לדאשבורד", callback_data="back_to_store")]
             ])
-        ) 
+        )
+
+async def handle_store_customers(update: Update, context: ContextTypes.DEFAULT_TYPE, session: AsyncSession) -> None:
+    """
+    טיפול בבקשת ניהול לקוחות
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    # בשלב זה נציג נתונים לדוגמה - בהמשך נממש שליפה אמיתית מה-API של ווקומרס
+    # TODO: לממש שליפת נתונים אמיתית מה-API של ווקומרס
+    
+    user_id = update.effective_user.id
+    store_data = await get_store_basic_data(user_id, session)
+    
+    # לקוחות אחרונים
+    recent_customers = [
+        {"id": "101", "name": "ישראל ישראלי", "email": "israel@example.com", "orders": 5, "total_spent": 1850, "last_order": "לפני יומיים", "phone": "050-1234567"},
+        {"id": "102", "name": "שרה כהן", "email": "sarah@example.com", "orders": 3, "total_spent": 1200, "last_order": "לפני שבוע", "phone": "052-7654321"},
+        {"id": "103", "name": "דוד לוי", "email": "david@example.com", "orders": 8, "total_spent": 3200, "last_order": "אתמול", "phone": "054-9876543"},
+        {"id": "104", "name": "רחל אברהם", "email": "rachel@example.com", "orders": 2, "total_spent": 750, "last_order": "לפני שבועיים", "phone": "053-1122334"},
+        {"id": "105", "name": "יעקב כהן", "email": "yaakov@example.com", "orders": 1, "total_spent": 420, "last_order": "לפני חודש", "phone": "058-5566778"}
+    ]
+    
+    # סטטיסטיקות לקוחות
+    customer_stats = {
+        "total": store_data.get("total_customers", 87),
+        "new_this_month": 12,
+        "returning": 45,
+        "avg_orders": 2.5,
+        "avg_order_value": 350
+    }
+    
+    customers_text = (
+        "👥 *ניהול לקוחות*\n\n"
+        
+        "*סטטיסטיקות לקוחות:*\n"
+        f"• סה\"כ לקוחות: {customer_stats['total']}\n"
+        f"• לקוחות חדשים החודש: {customer_stats['new_this_month']}\n"
+        f"• לקוחות חוזרים: {customer_stats['returning']}\n"
+        f"• ממוצע הזמנות ללקוח: {customer_stats['avg_orders']}\n"
+        f"• ערך הזמנה ממוצע: {customer_stats['avg_order_value']}₪\n\n"
+        
+        "*לקוחות אחרונים:*\n"
+    )
+    
+    # הוספת לקוחות אחרונים
+    for customer in recent_customers:
+        customers_text += (
+            f"*{customer['name']}* (ID: {customer['id']})\n"
+            f"• אימייל: {customer['email']}\n"
+            f"• טלפון: {customer['phone']}\n"
+            f"• הזמנות: {customer['orders']}\n"
+            f"• סה\"כ קניות: {customer['total_spent']}₪\n"
+            f"• הזמנה אחרונה: {customer['last_order']}\n\n"
+        )
+    
+    # כפתורים לניהול לקוחות וחזרה לדאשבורד
+    keyboard = [
+        [InlineKeyboardButton("🔍 חיפוש לקוח", callback_data="search_customer")],
+        [InlineKeyboardButton("📊 סגמנטציה של לקוחות", callback_data="customer_segments")],
+        [InlineKeyboardButton("📧 שליחת אימייל ללקוחות", callback_data="email_customers")],
+        [InlineKeyboardButton("💰 לקוחות VIP", callback_data="vip_customers")],
+        [InlineKeyboardButton("🔙 חזרה לדאשבורד", callback_data="back_to_store")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        customers_text,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+
+async def handle_store_inventory(update: Update, context: ContextTypes.DEFAULT_TYPE, session: AsyncSession) -> None:
+    """
+    טיפול בבקשת ניהול מלאי
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    # בשלב זה נציג נתונים לדוגמה - בהמשך נממש שליפה אמיתית מה-API של ווקומרס
+    # TODO: לממש שליפת נתונים אמיתית מה-API של ווקומרס
+    
+    user_id = update.effective_user.id
+    store_data = await get_store_basic_data(user_id, session)
+    
+    # סטטיסטיקות מלאי
+    inventory_stats = {
+        "total_products": store_data.get("total_products", 156),
+        "in_stock": 130,
+        "low_stock": store_data.get("low_stock", 5),
+        "out_of_stock": 21,
+        "total_value": 45000
+    }
+    
+    # מוצרים במלאי נמוך
+    low_stock_products = [
+        {"name": "חולצת פולו", "stock": 2, "price": 120, "sku": "SH-001"},
+        {"name": "כובע קיץ", "stock": 3, "price": 80, "sku": "HAT-002"},
+        {"name": "גרביים", "stock": 5, "price": 30, "sku": "SOC-003"},
+        {"name": "חגורת עור", "stock": 4, "price": 150, "sku": "BLT-004"},
+        {"name": "צעיף חורף", "stock": 1, "price": 100, "sku": "SCF-005"}
+    ]
+    
+    inventory_text = (
+        "📦 *ניהול מלאי*\n\n"
+        
+        "*סטטיסטיקות מלאי:*\n"
+        f"• סה\"כ מוצרים: {inventory_stats['total_products']}\n"
+        f"• מוצרים במלאי: {inventory_stats['in_stock']}\n"
+        f"• מוצרים במלאי נמוך: {inventory_stats['low_stock']}\n"
+        f"• מוצרים שאזל המלאי: {inventory_stats['out_of_stock']}\n"
+        f"• ערך מלאי כולל: {inventory_stats['total_value']}₪\n\n"
+        
+        "*מוצרים במלאי נמוך:*\n"
+    )
+    
+    # הוספת מוצרים במלאי נמוך
+    for product in low_stock_products:
+        inventory_text += (
+            f"*{product['name']}* (SKU: {product['sku']})\n"
+            f"• מלאי נוכחי: ⚠️ {product['stock']} יח'\n"
+            f"• מחיר: {product['price']}₪\n\n"
+        )
+    
+    # כפתורים לניהול מלאי וחזרה לדאשבורד
+    keyboard = [
+        [InlineKeyboardButton("🔄 עדכון מלאי", callback_data="update_stock")],
+        [InlineKeyboardButton("📦 הזמנת מלאי", callback_data="order_stock")],
+        [InlineKeyboardButton("📊 דוח מלאי מפורט", callback_data="inventory_report")],
+        [InlineKeyboardButton("⚙️ הגדרות ניהול מלאי", callback_data="inventory_settings")],
+        [InlineKeyboardButton("🔙 חזרה לדאשבורד", callback_data="back_to_store")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        inventory_text,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    ) 

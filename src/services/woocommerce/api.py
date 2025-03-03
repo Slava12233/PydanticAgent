@@ -14,6 +14,33 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+def get_woocommerce_api(store_url, consumer_key, consumer_secret):
+    """
+    יצירת חיבור ל-API של WooCommerce
+    
+    Args:
+        store_url: כתובת החנות
+        consumer_key: מפתח צרכן
+        consumer_secret: סוד צרכן
+    
+    Returns:
+        אובייקט API של WooCommerce
+    """
+    try:
+        from woocommerce import API
+        
+        return API(
+            url=store_url,
+            consumer_key=consumer_key,
+            consumer_secret=consumer_secret,
+            version="wc/v3",
+            timeout=30
+        )
+    except ImportError:
+        raise ImportError("נדרש להתקין את חבילת woocommerce: pip install woocommerce")
+    except Exception as e:
+        raise Exception(f"שגיאה ביצירת חיבור ל-API של WooCommerce: {str(e)}")
+
 class WooCommerceAPI:
     """
     מחלקה לתקשורת עם ה-API של ווקומרס
@@ -262,33 +289,7 @@ class WooCommerceAPI:
             logger.error(f"Failed to update order {order_id}: {status_code} - {response}")
             return None
     
-    async def get_customers(self, params: dict = None) -> List[dict]:
-        """
-        קבלת רשימת לקוחות
-        
-        Args:
-            params: פרמטרים לסינון התוצאות
-            
-        Returns:
-            list: רשימת לקוחות
-        """
-        default_params = {
-            "per_page": 20,
-            "page": 1
-        }
-        
-        if params:
-            default_params.update(params)
-        
-        status_code, response = await self._make_request("GET", "customers", params=default_params)
-        
-        if status_code == 200 and isinstance(response, list):
-            return response
-        else:
-            logger.error(f"Failed to get customers: {status_code} - {response}")
-            return []
-    
-    async def get_store_info(self) -> dict:
+    async def get_store_info(self) -> Dict[str, Any]:
         """
         קבלת מידע על החנות
         
@@ -384,6 +385,21 @@ class CachedWooCommerceAPI:
         
         logger.info(f"CachedWooCommerceAPI initialized with TTL: {cache_ttl} seconds")
     
+    async def _make_request(self, method: str, endpoint: str, params: dict = None, data: dict = None) -> Tuple[int, Any]:
+        """
+        ביצוע בקשה ל-API
+        
+        Args:
+            method: שיטת הבקשה (GET, POST, PUT, DELETE)
+            endpoint: נקודת קצה ב-API
+            params: פרמטרים לבקשה
+            data: נתונים לשליחה בבקשה
+            
+        Returns:
+            tuple: (קוד תשובה, נתוני תשובה)
+        """
+        return await self.api._make_request(method, endpoint, params, data)
+    
     def _is_cache_valid(self, cache_key: str) -> bool:
         """
         בדיקה האם המטמון תקף
@@ -448,22 +464,22 @@ class CachedWooCommerceAPI:
             tuple: (קוד תשובה, נתוני תשובה)
         """
         # בניית מפתח מטמון
-        cache_key = f"GET:{endpoint}:{json.dumps(params or {})}"
+        cache_key = f"GET:{endpoint}:{str(params)}"
         
-        # בדיקה אם יש תוצאה במטמון
+        # בדיקה אם יש במטמון
         cached_result = self._get_from_cache(cache_key)
         if cached_result is not None:
-            logger.debug(f"Cache hit for: {cache_key}")
-            return 200, cached_result
+            logger.debug(f"Cache hit for {cache_key}")
+            return cached_result
         
         # ביצוע הבקשה
-        status_code, result = await self.api._make_request("GET", endpoint, params=params)
+        result = await self._make_request("GET", endpoint, params=params)
         
-        # שמירה במטמון אם הבקשה הצליחה
-        if status_code == 200:
-            self._set_in_cache(cache_key, result)
+        # שמירה במטמון
+        self._set_in_cache(cache_key, result)
+        logger.debug(f"Cache miss for {cache_key}, stored in cache")
         
-        return status_code, result
+        return result
     
     async def post(self, endpoint: str, data: dict = None, params: dict = None) -> Tuple[int, Any]:
         """
@@ -480,7 +496,7 @@ class CachedWooCommerceAPI:
         # ניקוי המטמון בעת שינוי נתונים
         self._clear_cache()
         
-        return await self.api._make_request("POST", endpoint, params=params, data=data)
+        return await self._make_request("POST", endpoint, params=params, data=data)
     
     async def put(self, endpoint: str, data: dict = None, params: dict = None) -> Tuple[int, Any]:
         """
@@ -497,7 +513,7 @@ class CachedWooCommerceAPI:
         # ניקוי המטמון בעת שינוי נתונים
         self._clear_cache()
         
-        return await self.api._make_request("PUT", endpoint, params=params, data=data)
+        return await self._make_request("PUT", endpoint, params=params, data=data)
     
     async def delete(self, endpoint: str, params: dict = None) -> Tuple[int, Any]:
         """
@@ -513,7 +529,7 @@ class CachedWooCommerceAPI:
         # ניקוי המטמון בעת שינוי נתונים
         self._clear_cache()
         
-        return await self.api._make_request("DELETE", endpoint, params=params)
+        return await self._make_request("DELETE", endpoint, params=params)
 
 def get_cached_woocommerce_api(store_url: str, consumer_key: str, consumer_secret: str, cache_ttl: int = 300) -> CachedWooCommerceAPI:
     """

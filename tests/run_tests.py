@@ -1,26 +1,40 @@
 """
-סקריפט להרצת כל הבדיקות
+סקריפט להרצת בדיקות למערכת
 """
-import unittest
-import sys
 import os
+import sys
+import argparse
+from run_comprehensive_tests import run_tests
 
-# הוספת תיקיית הפרויקט ל-PYTHONPATH
-sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
-
-def run_tests():
-    """הרצת כל הבדיקות"""
-    # גילוי אוטומטי של כל הבדיקות
-    test_loader = unittest.TestLoader()
-    test_suite = test_loader.discover('.', pattern='test_*.py')
+def main():
+    """
+    פונקציה ראשית להרצת בדיקות
+    """
+    parser = argparse.ArgumentParser(description='הרצת בדיקות למערכת')
+    parser.add_argument('--type', choices=['integration', 'user', 'performance', 'intent', 'manager', 'all'], 
+                        default='all', help='סוג הבדיקות להרצה')
+    parser.add_argument('--verbose', action='store_true', help='הצגת פלט מפורט')
+    parser.add_argument('--file', type=str, help='הרצת קובץ בדיקה ספציפי')
     
-    # הרצת הבדיקות
-    test_runner = unittest.TextTestRunner(verbosity=2)
-    result = test_runner.run(test_suite)
+    args = parser.parse_args()
     
-    # החזרת קוד יציאה מתאים
-    return 0 if result.wasSuccessful() else 1
+    if args.file:
+        # הרצת קובץ בדיקה ספציפי
+        if not os.path.exists(args.file):
+            # בדיקה אם הקובץ קיים בתיקיית הבדיקות
+            test_file = os.path.join('tests', args.file)
+            if not os.path.exists(test_file):
+                print(f"❌ קובץ הבדיקה {args.file} לא נמצא")
+                return 1
+            args.file = test_file
+            
+        print(f"🧪 מריץ בדיקה מקובץ: {args.file}")
+        os.system(f'python {args.file}')
+    else:
+        # הרצת בדיקות לפי סוג
+        run_tests(args.type, args.verbose)
+    
+    return 0
 
 if __name__ == "__main__":
-    # הרצת הבדיקות
-    sys.exit(run_tests()) 
+    sys.exit(main()) 

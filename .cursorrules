@@ -67,6 +67,31 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - For content filter errors, explain that the question violates content policies and suggest rephrasing.
 - Use try-except blocks with specific exception types rather than catching all exceptions generically when possible.
 - Log different error types with appropriate severity levels (warning for quota issues, error for other failures).
+- When writing asynchronous tests in Python, create a base AsyncTestCase class that includes a run_async method to properly execute and await coroutines. This prevents "coroutine was never awaited" warnings and ensures proper test execution.
+- For testing asynchronous functions, wrap the test logic in a nested async function and use asyncio.run() to execute it, rather than making the test method itself async.
+- When mocking asynchronous functions, use AsyncMock instead of regular MagicMock to properly simulate async behavior.
+- When testing WooCommerce API integration, use environment variables (TEST_STORE_URL, TEST_CONSUMER_KEY, TEST_CONSUMER_SECRET) to store test store credentials.
+- For WooCommerce product testing, use the "draft" status to prevent test products from appearing in the live store.
+- Always clean up test products after testing by deleting them from the store to avoid cluttering the database.
+- When testing product creation, use a timestamp in the product name to ensure uniqueness and make it easy to identify test products.
+- For performance testing, measure execution time in milliseconds and set reasonable thresholds (e.g., less than 1000ms) for each operation.
+- When testing Hebrew support, check both text processing (input) and display formatting (output) to ensure full compatibility.
+- Test Markdown parsing specifically with Hebrew text to catch any RTL (right-to-left) formatting issues.
+- Remember that we're building an MVP (Minimum Viable Product), so focus on core functionality that works well rather than implementing every possible feature.
+- All store operations must work through natural conversation, not just through commands. The main agent should guide users who don't know how to use commands.
+- The agent should proactively help users navigate the system, not expect users to know all the commands or exact syntax.
+- When implementing task type identification, include a wide range of natural language expressions and variations to handle different ways users might phrase their requests.
+- For task type identification, include both formal and informal language patterns, as users often use casual language in chat interfaces.
+- When adding keywords for task identification, consider adding complete phrases and not just individual words to improve accuracy.
+- For better task identification, assign higher scores to longer, more specific phrases that match user queries.
+- When testing task identification, create a comprehensive test suite with various phrasings to ensure the system handles different ways of expressing the same intent.
+- When dealing with Hebrew text in console output, use proper encoding settings (UTF-8) to avoid character display issues.
+- For testing functionality with Hebrew text, consider writing results to files instead of relying solely on console output, which may have encoding limitations.
+- When implementing product creation from natural language, ensure the extraction of product data is robust and can handle various ways users might describe products.
+- For WooCommerce integration, use a caching mechanism to improve performance and reduce API calls, especially for read operations.
+- When implementing caching for WooCommerce API, make sure to invalidate the cache after write operations (POST, PUT, DELETE) to ensure data consistency.
+- For product management, provide clear feedback to users about the status of their operations, including success messages and error details when applicable.
+- כאשר עובדים עם תאריכים בפייתון ומבצעים מניפולציות על חודשים, יש לטפל בכל המקרים האפשריים (במיוחד כאשר החודש הוא 1 או 12) כדי למנוע שגיאות כמו `ValueError: month must be in 1..12`. למשל, כאשר מחשבים תאריך לפני שנה, יש לטפל בנפרד במקרה שהחודש הוא 12 (יש לחזור לחודש 1 של השנה הקודמת) ובמקרה שהחודש הוא בין 1 ל-11 (יש לחזור לחודש הבא של השנה הקודמת).
 
 ## Cursor learned
 
@@ -84,6 +109,12 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - When implementing a RAG system, update the configuration file to include new commands for document operations
 - Store document chunks in the database with metadata to enable efficient retrieval during conversations
 - Implement both bot commands and command-line interfaces for document management to provide flexibility
+- For WooCommerce integration, use a caching mechanism to improve performance and reduce API calls
+- When implementing caching, ensure cache invalidation occurs when data is modified (POST, PUT, DELETE requests)
+- Test caching performance by comparing execution times with and without caching enabled
+- When testing functionality with Hebrew text in Windows PowerShell, be aware of potential encoding issues that may cause display problems
+- The product management system includes robust extraction of product data from natural language text
+- The system uses a comprehensive approach to format product displays with emojis and clear structure for better user experience
 
 # Scratchpad
 
@@ -94,6 +125,7 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - Stores chat history in PostgreSQL database
 - Uses OpenAI's GPT-4 model
 - Includes RAG system for enhanced responses based on custom documents
+- WooCommerce integration for store management
 
 ## Project Structure
 - `run.py` - Entry point for running the bot
@@ -104,209 +136,143 @@ The goal is to help you maintain a big picture as well as the progress of the ta
 - `src/database/models.py` - Database models for messages and documents
 - `src/database/rag_utils.py` - RAG utility functions
 - `src/tools/document_manager.py` - Document management for RAG
+- `src/tools/product_manager.py` - Product management for WooCommerce
+- `src/tools/product_intent_recognizer.py` - Intent recognition for product creation
+- `src/tools/order_manager.py` - Order management for WooCommerce
+- `src/tools/order_intent_recognizer.py` - Intent recognition for order management
+- `src/tools/woocommerce_templates.py` - Templates for WooCommerce responses
+- `src/tools/woocommerce_tools.py` - General WooCommerce utilities with caching
 - `src/core/config.py` - Configuration settings
 - `.env` - Environment variables (API keys, database credentials)
 - `GitResurces/` - Contains external Git libraries including pydantic-ai
 - `.gitignore` - Defines files and directories to be ignored by Git
 - `README.md` - Project documentation in Hebrew and English
 
-## Recent Tasks
+## תוכנית עבודה לשיפור הסוכן - יולי 2024
 
-### Logfire Integration
-[X] Understand Logfire's purpose and functionality
-[X] Check existing installation and configuration
-[X] Install required packages (`logfire[httpx]`)
-[X] Add Logfire configuration to main.py
-[X] Add monitoring for Telegram bot commands
-[X] Add monitoring for message handling
-[X] Add monitoring for database operations
-[X] Add proper cleanup and shutdown
-[X] Test the integration
-[X] Update documentation (.cursorrules)
+לאחר השיפורים שביצענו במערכת זיהוי הכוונות, אנו מתקדמים לשלב הבא של שיפור הסוכן כדי שיוכל להבין ולהגיב בצורה טבעית יותר. להלן תוכנית עבודה מפורטת:
 
-### Git Configuration
-[X] Create .gitignore file
-[X] Include Python-specific patterns
-[X] Include project-specific patterns (database files, environment variables, Logfire)
-[X] Update documentation (.cursorrules)
-[X] Initialize Git repository
-[X] Add remote repository
-[X] Commit and push initial files
+### שלב 1: שיפור הבנת הקונטקסט
+[X] יצירת מודול `context_manager.py` שיטפל בשמירה וניתוח של הקשר השיחה
+[X] פיתוח פונקציה `understand_context` שתנתח את היסטוריית השיחה ותזהה אזכורים קודמים
+[X] הוספת זיהוי כינויי גוף והתייחסויות עקיפות ("זה", "הוא", "אותו", וכו')
+[X] שיפור הפונקציה `get_response` בסוכן כך שתשתמש במידע הקשרי
+[X] יצירת מנגנון לשמירת ישויות מרכזיות בשיחה (מוצרים, הזמנות, לקוחות)
+[X] הוספת בדיקות יחידה למודול הקשר
 
-### Project Documentation
-[X] Create README.md file
-[X] Add Hebrew documentation
-[X] Add English documentation
-[X] Include installation instructions
-[X] Include usage instructions
-[X] Document project structure
-[X] Document available commands
-[X] Commit and push README.md
+### שלב 2: שיפור הבנת שאלות מורכבות
+[X] פיתוח פונקציה `parse_complex_query` שתפרק שאילתות מורכבות למשימות פשוטות
+[X] זיהוי מחברים לוגיים בעברית ("ו", "וגם", "ואז", "אחר כך", "בנוסף")
+[X] יצירת מנגנון לביצוע רצף משימות שזוהו בשאילתה מורכבת
+[X] הוספת מנגנון לטיפול בשאלות השוואתיות ("מה ההבדל בין X ל-Y")
+[X] פיתוח יכולת לזהות שאלות היפותטיות ("מה יקרה אם...")
+[X] הוספת בדיקות יחידה לפירוק שאילתות מורכבות
 
-### Code Refactoring
-[X] Create agent.py file for AI logic
-[X] Move Agent initialization and prompt handling to agent.py
-[X] Add TelegramAgent class with get_response and stream_response methods
-[X] Update main.py to use the new TelegramAgent class
-[X] Update README.md to reflect the new architecture
-[X] Update .cursorrules with the changes
+### שלב 3: שיפור התגובות בשפה טבעית
+[X] יצירת מודול `response_generator.py` שייצר תשובות בשפה טבעית
+[X] פיתוח פונקציה `generate_natural_response` שתקבל נתונים וכוונה ותחזיר תשובה טבעית
+[X] הוספת מגוון תבניות תשובה לכל סוג כוונה
+[X] שילוב אימוג'ים ופורמט מתאים בתשובות
+[X] הוספת וריאציות לשוניות לתשובות כדי למנוע חזרתיות
+[X] יצירת מנגנון לבחירה אקראית מבין תבניות תשובה מתאימות
+[X] הוספת בדיקות יחידה למודול יצירת התשובות
 
-### Fixing Timeout Issues and Improving Architecture
-[X] Create a dedicated bots directory for bot implementations
-[X] Create telegram_bot.py with improved timeout handling
-[X] Update main.py to use the new modular structure
-[X] Update run.py with better error handling
-[X] Increase timeout values for Telegram API calls
-[X] Add retry logic for API calls
-[X] Update documentation (.cursorrules)
+### שלב 4: שיפור הטיפול בשגיאות ואי-הבנות
+[X] פיתוח פונקציה `handle_misunderstanding` שתטפל במקרים של אי-הבנה
+[X] יצירת מנגנון לבקשת הבהרות כשהסוכן לא בטוח בהבנת השאלה
+[X] הוספת הצעות לניסוח מחדש של השאלה
+[X] פיתוח מנגנון לזיהוי שאלות דומות שהסוכן כן מבין
+[X] יצירת תשובות מותאמות לסוגי שגיאות שונים (API, חיבור לחנות, וכו')
+[X] הוספת בדיקות יחידה למודול טיפול בשגיאות
 
-### PostgreSQL Migration
-[X] Install required packages (psycopg2-binary, sqlalchemy)
-[X] Create database directory structure
-[X] Create database.py with SQLAlchemy models and operations
-[X] Update config.py with PostgreSQL connection settings
-[X] Update .env with PostgreSQL credentials
-[X] Update main.py to use the new database module
-[X] Update telegram_bot.py to use the new database module
-[X] Update telegram_agent.py to handle the new history format
-[X] Update .gitignore to include PostgreSQL-specific files
-[X] Update README.md with PostgreSQL information
-[X] Update requirements.txt with new dependencies
-[X] Update .cursorrules with lessons learned
+### שלב 5: למידה והשתפרות מתמדת
+[X] יצירת מודול `learning_manager.py` שיתעד אינטראקציות עם המשתמש
+[X] פיתוח פונקציה `log_interaction` שתשמור מידע על כל אינטראקציה
+[X] הוספת מנגנון לזיהוי אינטראקציות בעייתיות (ציון ביטחון נמוך, משוב שלילי)
+[X] יצירת דוחות תקופתיים על ביצועי הסוכן
+[X] פיתוח מנגנון לעדכון אוטומטי של מילות מפתח בהתבסס על אינטראקציות מוצלחות
+[X] הוספת בדיקות יחידה למודול הלמידה
 
-### Cleanup and Finalization
-[X] Remove old SQLite database file (chat_history.db)
-[X] Remove old services directory with SQLite code
-[X] Update config.py to remove references to SQLite
-[X] Test the application with PostgreSQL only
-[X] Update documentation (.cursorrules)
-[X] Update README.md to reflect the changes
-[X] Commit and push all changes to Git
+### שלב 6: שיפור האינטגרציה עם WooCommerce
+[X] הרחבת הפונקציונליות של `product_manager.py` לתמיכה בפעולות נוספות
+[X] שיפור הפונקציונליות של `order_manager.py` לתמיכה בפעולות מורכבות
+[X] הוספת מודול `customer_manager.py` לניהול לקוחות
+[X] פיתוח מודול `inventory_manager.py` לניהול מלאי
+[X] יצירת מודול `sales_analyzer.py` לניתוח מכירות ודוחות
+[X] הוספת בדיקות יחידה לכל המודולים החדשים
 
-### RAG System Implementation
-[X] Create database models for documents and chunks
-[X] Implement RAG utility functions
-[X] Create document manager tool
-[X] Update configuration with new commands
-[X] Update TelegramAgent to support RAG
-[X] Update telegram_bot.py with document management commands
-[X] Update README.md with RAG system documentation
-[X] Update .cursorrules with lessons learned
+### שלב 7: שיפור חווית המשתמש
+[ ] הוספת הצעות לפעולות נוספות בסוף כל תשובה
+[ ] יצירת מנגנון לאישור פעולות משמעותיות לפני ביצוען
+[ ] פיתוח יכולת להציג תצוגות מקדימות של שינויים
+[ ] הוספת קיצורי דרך לפעולות נפוצות
+[ ] שיפור הפורמט של הודעות ארוכות (כמו רשימות מוצרים)
+[ ] הוספת תמיכה בשליחת תמונות ומדיה אחרת בתשובות
 
-### Fixing Telegram User ID Issue and Improving RAG
-[X] Identify the issue with Telegram user IDs being too large for Integer field
-[X] Update models.py to use BigInteger for user IDs
-[X] Recreate database tables with the new schema
-[X] Improve the RAG search functionality with min_similarity parameter
-[X] Enhance the prompt in telegram_agent.py for better handling of personal information
-[X] Improve user feedback in document management commands
-[X] Add better error handling for file operations
-[X] Update .cursorrules with lessons learned
+### שלב 8: בדיקות ותיקון באגים
+[ ] יצירת מערכת בדיקות אוטומטיות לכל הפונקציונליות החדשה
+[ ] פיתוח תרחישי בדיקה מציאותיים לשיחה טבעית
+[ ] ביצוע בדיקות עומס על המערכת
+[ ] איתור וטיפול בבאגים
+[ ] מדידת ביצועים ואופטימיזציה
+[ ] תיעוד מקיף של כל הפונקציונליות החדשה
 
-### Database and RAG Testing Plan
-[X] Create comprehensive test script for database functionality
-[X] Test user and conversation management
-[X] Test message storage and retrieval
-[X] Test RAG document management
-[X] Test RAG search functionality
-[X] Test integration with the Telegram agent
-[X] Document test results and fix any issues
+## לוח זמנים מוצע
 
-#### 1. Database Connection Testing
-[X] Test connection to PostgreSQL database
-[X] Verify all tables are created correctly
-[X] Test connection pooling and timeout handling
-[X] Test error handling for connection issues
+### שבוע 1 (15-21 ביולי)
+- שלב 1: שיפור הבנת הקונטקסט
+- שלב 2: שיפור הבנת שאלות מורכבות
 
-#### 2. User and Conversation Management Testing
-[X] Test user creation and retrieval
-[X] Test conversation creation and management
-[X] Test active conversation switching
-[X] Test conversation history clearing
+### שבוע 2 (22-28 ביולי)
+- שלב 3: שיפור התגובות בשפה טבעית
+- שלב 4: שיפור הטיפול בשגיאות ואי-הבנות
 
-#### 3. Message Storage and Retrieval Testing
-[X] Test saving user and assistant messages
-[X] Test retrieving chat history
-[X] Test message formatting for agent context
-[X] Test message count and statistics
+### שבוע 3 (29 ביולי - 4 אוגוסט)
+- שלב 5: למידה והשתפרות מתמדת
+- שלב 6: שיפור האינטגרציה עם WooCommerce
 
-#### 4. RAG Document Management Testing
-[X] Test document addition from file
-[X] Test document addition from direct content
-[X] Test document chunking functionality
-[X] Test document metadata storage
-[X] Test document listing functionality
-[X] Test document deletion
+### שבוע 4 (5-11 אוגוסט)
+- שלב 7: שיפור חווית המשתמש
+- שלב 8: בדיקות ותיקון באגים
 
-#### 5. RAG Search Testing
-[X] Test embedding creation
-[X] Test vector similarity search
-[X] Test search result ranking
-[X] Test search result formatting
-[X] Test search performance with multiple documents
+## דוגמאות לאינטראקציות שהסוכן צריך לתמוך בהן
 
-#### 6. Agent Integration Testing
-[X] Test RAG integration with agent responses
-[X] Test context enhancement with RAG results
-[X] Test streaming responses with RAG
-[X] Test error handling in RAG-enhanced responses
+### 1. שאלות על מסמכים
+- "תגיד, יש לנו מסמך על מדיניות החזרות?"
+- "איפה אני יכול למצוא מידע על הגדרת מחירי משלוח?"
+- "מה כתוב במסמך של תנאי השימוש לגבי ביטול עסקה?"
 
-#### 7. Telegram Bot Command Testing
-[X] Test /add_document command flow
-[X] Test /search_documents command flow
-[X] Test document upload and processing
-[X] Test conversation state management during document operations
+### 2. שאלות על נתוני החנות
+- "כמה הזמנות היו לנו השבוע?"
+- "מה המוצר הכי נמכר בחודש האחרון?"
+- "איזה לקוח הזמין הכי הרבה בשנה האחרונה?"
+- "תראה לי את ההזמנות שעדיין לא נשלחו"
 
-### Multi-Model Support and Error Handling
-[X] Add support for Anthropic Claude models
-[X] Implement model provider prefix system (openai:, anthropic:)
-[X] Update agent initialization to handle different model providers
-[X] Add /switch_model command to change primary model
-[X] Add /set_fallback command to set backup model
-[X] Add /models command to display current models in use
-[X] Enhance error handling with specific error types (quota, timeout, content filter)
-[X] Improve error messages with helpful suggestions for users
-[X] Update help command to include new model-related commands
-[X] Test fallback mechanism with quota errors
-[X] Update documentation in .cursorrules
+### 3. ביצוע פעולות
+- "תעדכן את המחיר של חולצת כותנה ל-99 ש"ח"
+- "תוסיף 20 יחידות למלאי של מכנסי ג'ינס כחולים"
+- "תשנה את הסטטוס של הזמנה 1234 ל'נשלח'"
+- "תבטל את ההזמנה של דני כהן מאתמול"
 
-### Next Steps
-- Consider adding database indexes for performance optimization
-- Add support for more model providers (e.g., Mistral, Llama)
-- Implement user preferences for default models
-- Add usage tracking for different models
-- Consider implementing a rate limiting system to prevent quota errors
+### 4. שאלות מורכבות
+- "תראה לי את המוצרים שנגמרו מהמלאי ותעדכן את המחיר של חולצת כותנה ל-99 ש"ח"
+- "כמה הזמנות היו לנו השבוע וכמה מהן כבר נשלחו?"
+- "מי הלקוח שהזמין הכי הרבה בחודש האחרון ומה הוא הזמין?"
 
-### Admin Dashboard Development
-[ ] Design admin dashboard architecture
-[ ] Create admin command handlers in telegram_bot.py
-[ ] Implement user management features (list, block, unblock users)
-[ ] Add system statistics and monitoring features
-[ ] Implement document management for admins
-[ ] Add model usage analytics
-[ ] Add configuration management through admin commands
-[ ] Implement access control and permissions
-[ ] Add admin notification system
-[ ] Create comprehensive admin help documentation
+### 5. שאלות עם התייחסות להקשר
+- "מה המחיר שלו?" (אחרי שדיברו על מוצר מסוים)
+- "תעדכן אותו ל-150 ש"ח" (אחרי שדיברו על מחיר של מוצר)
+- "מתי היא צפויה להגיע?" (אחרי שדיברו על הזמנה מסוימת)
 
-### WooCommerce Dashboard Development
-[X] Create database models for WooCommerce integration (store, products, orders, customers)
-[X] Implement store connection process with API key authentication
-[X] Create basic dashboard UI with inline keyboard buttons
-[X] Add store statistics display functionality
-[X] Implement order management features
-[X] Add product management capabilities
-[X] Create customer management interface
-[X] Implement store settings and configuration
-[X] Organize project structure for WooCommerce integration
-[X] Update documentation with WooCommerce features
+### 6. שאלות היפותטיות
+- "מה יקרה אם אשנה את המחיר של כל המוצרים ב-10%?"
+- "איך זה ישפיע על המכירות אם אוסיף קופון הנחה של 20%?"
+- "כדאי לי להוסיף עוד קטגוריה למוצרים?"
 
-## Project Organization Lessons
+## מדדי הצלחה
 
-- Keep database tools in a dedicated directory (tests/db_tools) for better organization
-- Use a single .env file for all configuration settings including Logfire
-- Avoid duplicate directories in the project structure
-- Remove unnecessary files like install_dependencies.py when using manual installation
-- Make sure README files are updated when project structure changes
-- When moving files, update all references to them in other files
-- Use consistent naming conventions for files and directories
+1. **דיוק בזיהוי כוונות**: הסוכן צריך לזהות נכון לפחות 90% מהכוונות בשיחה טבעית.
+2. **שלמות המשימה**: הסוכן צריך להשלים לפחות 85% מהמשימות שהוא מזהה.
+3. **טבעיות השיחה**: המשתמשים צריכים לדרג את טבעיות השיחה בציון ממוצע של לפחות 4 מתוך 5.
+4. **זמן תגובה**: הסוכן צריך להגיב תוך פחות מ-3 שניות בממוצע.
+5. **שביעות רצון המשתמש**: המשתמשים צריכים לדרג את שביעות רצונם הכללית בציון ממוצע של לפחות 4.2 מתוך 5.

@@ -21,6 +21,7 @@ A smart Telegram bot based on Pydantic AI and OpenAI GPT-4. The bot allows users
 - **Advanced Error Handling** - Specific error messages for different types of errors (quota, timeout, content filter)
 - **User Role Management** - Support for different user roles (ADMIN, USER, BLOCKED) for access control
 - **WooCommerce Dashboard** - Built-in dashboard for managing WooCommerce stores directly from Telegram
+- **WooCommerce API Caching** - Performance optimization with caching mechanism for WooCommerce API requests
 - **DASHBOARD** - ממשק מובנה לניהול חנויות ווקומרס ישירות מטלגרם
 
 ## 🛠️ Installation
@@ -82,6 +83,11 @@ POSTGRES_PORT=5432
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_password
+
+# WooCommerce settings (for store management)
+WOOCOMMERCE_URL=your_woocommerce_store_url
+WOOCOMMERCE_CONSUMER_KEY=your_woocommerce_consumer_key
+WOOCOMMERCE_CONSUMER_SECRET=your_woocommerce_consumer_secret
 ```
 
 ## 🚀 Running the Bot
@@ -106,6 +112,7 @@ The bot will start running and be available on Telegram. Send `/start` to the bo
 - `/add_document` - Add a document to the knowledge base (RAG system)
 - `/search_documents` - Search for information in the knowledge base
 - `/cancel` - Cancel the current operation
+- `/store` - Access the WooCommerce store management dashboard
 
 ## 📚 Supported File Types for RAG System
 
@@ -137,6 +144,34 @@ The bot now supports multiple file types for the RAG (Retrieval Augmented Genera
 
 Once you've added documents to your knowledge base, the bot will automatically use this information to enhance its responses when you ask questions related to the content of your documents.
 
+## 🏪 WooCommerce Integration
+
+The bot includes a comprehensive WooCommerce integration that allows you to manage your online store directly from Telegram.
+
+### Features
+
+- View and manage products
+- View and manage orders
+- Check store statistics
+- Create new products with AI assistance
+- Respond to customer inquiries
+- Manage categories
+
+### Performance Optimization
+
+The WooCommerce integration includes a caching mechanism that significantly improves performance:
+
+- **API Request Caching**: Frequently accessed data like categories and products are cached to reduce API calls
+- **Configurable Cache TTL**: Set how long data should be cached before refreshing
+- **Automatic Cache Invalidation**: Cache is automatically cleared when data is modified
+- **Performance Monitoring**: Built-in tools to measure and compare performance with and without caching
+
+### Using the WooCommerce Dashboard
+
+1. Send the `/store` command to the bot
+2. Select the desired operation from the menu
+3. Follow the prompts to complete the operation
+
 ## 🧩 Project Structure
 
 The project follows a modular architecture:
@@ -149,6 +184,12 @@ PydanticAgent/
 ├── .gitignore              # Git ignore file
 ├── README.md               # Project documentation
 ├── .cursorrules            # Rules and lessons learned for development
+├── tests/                  # Test directory
+│   ├── test_woocommerce_api_integration.py  # WooCommerce API integration tests
+│   ├── test_user_scenarios.py               # User scenario tests
+│   ├── test_performance_hebrew.py           # Performance and Hebrew support tests
+│   ├── test_woocommerce_cache.py            # WooCommerce caching tests
+│   └── test_master.py                       # Script to run all comprehensive tests
 └── src/                    # Source code directory
     ├── __init__.py         # Package initialization
     ├── main.py             # Main application flow
@@ -168,9 +209,15 @@ PydanticAgent/
     │   ├── rag_utils.py    # RAG utility functions
     │   ├── test_database.py # Database testing script
     │   └── view_messages.py # Utility to view stored messages
+    ├── services/           # External services
+    │   ├── __init__.py
+    │   └── woocommerce_api.py # WooCommerce API integration
     ├── tools/              # Utility tools
     │   ├── __init__.py
-    │   └── document_manager.py # Document management for RAG
+    │   ├── document_manager.py # Document management for RAG
+    │   ├── product_manager.py  # Product management for WooCommerce
+    │   ├── product_intent_recognizer.py # Product intent recognition
+    │   └── woocommerce_tools.py # WooCommerce API tools with caching
     └── utils/              # Utility functions
         └── __init__.py
 ```
@@ -198,6 +245,46 @@ These settings can be adjusted in `src/bots/telegram_bot.py` if needed.
 ### Database Configuration
 
 The bot uses PostgreSQL for storing chat history. The database connection is configured in `src/core/config.py` and can be customized through environment variables in the `.env` file.
+
+### WooCommerce API Caching
+
+The bot includes a caching mechanism for WooCommerce API requests to improve performance:
+
+#### How It Works
+
+1. **Cache Implementation**: The `CachedWooCommerceAPI` class wraps the standard WooCommerce API client and adds caching functionality.
+2. **Cache Storage**: Responses are stored in memory with timestamps for TTL (Time To Live) management.
+3. **Cache Invalidation**: The cache is automatically cleared when data is modified (POST, PUT, DELETE requests).
+4. **Performance Benefits**: Reduces API calls, improves response times, and reduces server load.
+
+#### Using the Caching Mechanism
+
+```python
+from src.services.woocommerce.api import get_cached_woocommerce_api
+
+# Create a cached WooCommerce API client
+api = get_cached_woocommerce_api(
+    store_url="your_store_url",
+    consumer_key="your_consumer_key",
+    consumer_secret="your_consumer_secret",
+    cache_ttl=60  # Cache TTL in seconds (default: 300)
+)
+
+# Use the API as usual - caching is handled automatically
+response = api.get("products")
+```
+
+#### Performance Testing
+
+The project includes a dedicated test file (`tests/test_woocommerce_cache.py`) for measuring and comparing performance with and without caching:
+
+```bash
+# Run the cache performance tests
+python -m tests.test_woocommerce_cache
+
+# Run all tests including cache tests
+python -m tests.test_master --type cache
+```
 
 ### RAG System
 
@@ -317,7 +404,59 @@ If you have any questions or suggestions, don't hesitate to reach out!
 python tests/run_tests.py
 ```
 
----
+## 🧪 Testing
+
+The project includes comprehensive tests for various components, with a focus on the WooCommerce integration:
+
+### Running Tests
+
+To run all comprehensive tests:
+
+```bash
+python tests/run_comprehensive_tests.py
+```
+
+To run specific test types:
+
+```bash
+# Run only integration tests
+python tests/run_comprehensive_tests.py --type integration
+
+# Run only user scenario tests
+python tests/run_comprehensive_tests.py --type user
+
+# Run only performance and Hebrew support tests
+python tests/run_comprehensive_tests.py --type performance
+
+# Run tests with verbose output
+python tests/run_comprehensive_tests.py --verbose
+```
+
+### Test Types
+
+1. **Integration Tests** - Tests the integration with the WooCommerce API, including product creation, updating, and retrieval.
+
+2. **User Scenario Tests** - Tests complete user scenarios from the user's perspective, simulating conversations and verifying the expected outcomes.
+
+3. **Performance and Hebrew Support Tests** - Tests the performance of the system and its support for Hebrew language, including response times and proper handling of Hebrew text.
+
+## 🛒 ממשק ניהול WooCommerce
+
+הבוט כולל ממשק מובנה לניהול חנויות WooCommerce ישירות מטלגרם. ממשק זה מאפשר למשתמשים לבצע פעולות כגון:
+
+- יצירת מוצרים חדשים
+- עדכון מוצרים קיימים
+- צפייה בהזמנות
+- ניהול מלאי
+- קבלת סטטיסטיקות מכירות
+
+כדי להשתמש בממשק ניהול WooCommerce, יש להגדיר את פרטי החיבור לחנות ה-WooCommerce בקובץ ה-`.env`:
+
+```
+WOOCOMMERCE_URL=https://your-store-url.com
+WOOCOMMERCE_CONSUMER_KEY=your_consumer_key
+WOOCOMMERCE_CONSUMER_SECRET=your_consumer_secret
+```
 
 # בוט טלגרם מבוסס Pydantic AI
 
@@ -469,6 +608,12 @@ PydanticAgent/
 ├── .gitignore              # קובץ Git ignore
 ├── README.md               # תיעוד הפרויקט
 ├── .cursorrules            # כללים ולקחים שנלמדו בפיתוח
+├── tests/                  # תיקיית בדיקות
+│   ├── test_woocommerce_api_integration.py  # בדיקות אינטגרציה עם API ווקומרס
+│   ├── test_user_scenarios.py               # בדיקות מצבי משתמש
+│   ├── test_performance_hebrew.py           # בדיקות ביצוע ותמיכה בעברית
+│   ├── test_woocommerce_cache.py            # בדיקות מטמון עם WooCommerce
+│   └── test_master.py                       # סקריפט להרצת בדיקות מלאות
 └── src/                    # תיקיית קוד המקור
     ├── __init__.py         # אתחול חבילה
     ├── main.py             # זרימת היישום הראשית
@@ -488,9 +633,15 @@ PydanticAgent/
     │   ├── rag_utils.py    # פונקציות עזר ל-RAG
     │   ├── test_database.py # סקריפט בדיקה למסד הנתונים
     │   └── view_messages.py # כלי להצגת הודעות שמורות
+    ├── services/           # מודולי שירותים חיצוניים
+    │   ├── __init__.py
+    │   └── woocommerce_api.py # מימוש אינטגרציה עם API ווקומרס
     ├── tools/              # כלי עזר
     │   ├── __init__.py
-    │   └── document_manager.py # ניהול מסמכים עבור RAG
+    │   ├── document_manager.py # ניהול מסמכים עבור RAG
+    │   ├── product_manager.py  # ניהול מוצרים עבור ווקומרס
+    │   ├── product_intent_recognizer.py # מימוש הזהה מטרה מוצר
+    │   └── woocommerce_tools.py # כלי עזר ל-API עם WooCommerce עם מטמון
     └── utils/              # פונקציות שירות
         └── __init__.py
 ```
@@ -629,12 +780,118 @@ python -m src.database.test_database
 
 אם יש לך שאלות או הצעות, אל תהסס ליצור קשר!
 
-## 🧪 הרצת בדיקות
+## 🧪 בדיקות
 
-כדי להריץ את כל הבדיקות, השתמש בפקודה:
+הפרויקט כולל בדיקות מקיפות למרכיבים שונים, עם דגש על האינטגרציה עם WooCommerce:
+
+### הרצת בדיקות
+
+להרצת כל הבדיקות המקיפות:
 
 ```bash
-python tests/run_tests.py
+python tests/run_comprehensive_tests.py
 ```
+
+להרצת סוגי בדיקות ספציפיים:
+
+```bash
+# הרצת בדיקות אינטגרציה בלבד
+python tests/run_comprehensive_tests.py --type integration
+
+# הרצת בדיקות תרחישי משתמש בלבד
+python tests/run_comprehensive_tests.py --type user
+
+# הרצת בדיקות ביצועים ותמיכה בעברית בלבד
+python tests/run_comprehensive_tests.py --type performance
+
+# הרצת בדיקות עם פלט מפורט
+python tests/run_comprehensive_tests.py --verbose
+```
+
+### סוגי בדיקות
+
+1. **בדיקות אינטגרציה** - בודקות את האינטגרציה עם ה-API של WooCommerce, כולל יצירת מוצרים, עדכון ואחזור.
+
+2. **בדיקות תרחישי משתמש** - בודקות תרחישי משתמש מלאים מנקודת המבט של המשתמש, מדמות שיחות ומאמתות את התוצאות הצפויות.
+
+3. **בדיקות ביצועים ותמיכה בעברית** - בודקות את ביצועי המערכת ואת התמיכה בשפה העברית, כולל זמני תגובה וטיפול נכון בטקסט בעברית.
+
+## 🛒 ממשק ניהול WooCommerce
+
+הבוט כולל ממשק מובנה לניהול חנויות WooCommerce ישירות מטלגרם. ממשק זה מאפשר למשתמשים לבצע פעולות כגון:
+
+- יצירת מוצרים חדשים
+- עדכון מוצרים קיימים
+- צפייה בהזמנות
+- ניהול מלאי
+- קבלת סטטיסטיקות מכירות
+
+כדי להשתמש בממשק ניהול WooCommerce, יש להגדיר את פרטי החיבור לחנות ה-WooCommerce בקובץ ה-`.env`:
+
+```
+WOOCOMMERCE_URL=https://your-store-url.com
+WOOCOMMERCE_CONSUMER_KEY=your_consumer_key
+WOOCOMMERCE_CONSUMER_SECRET=your_consumer_secret
+```
+
+## מודולים עיקריים
+
+### מודול הסוכן (Agent)
+מודול זה מכיל את הלוגיקה העיקרית של הסוכן החכם. הוא אחראי על:
+- קבלת הודעות מהמשתמש
+- עיבוד ההודעות והבנת הכוונה
+- יצירת תשובות מתאימות
+- שימוש במודלי שפה מתקדמים
+
+### מודול הבוט (Bot)
+מודול זה מכיל את הממשק עם פלטפורמת טלגרם. הוא אחראי על:
+- קבלת הודעות מטלגרם
+- העברת ההודעות לסוכן
+- שליחת תשובות הסוכן למשתמש
+- ניהול פקודות מיוחדות
+
+### מודול מסד הנתונים (Database)
+מודול זה מכיל את הלוגיקה לעבודה עם מסד הנתונים. הוא אחראי על:
+- שמירת היסטוריית השיחות
+- שמירת מסמכים ומידע
+- אחזור מידע רלוונטי
+
+### מודול RAG (Retrieval-Augmented Generation)
+מודול זה מכיל את הלוגיקה לשיפור תשובות הסוכן באמצעות מידע ממסמכים. הוא אחראי על:
+- אחסון מסמכים
+- חיפוש במסמכים
+- שילוב מידע ממסמכים בתשובות הסוכן
+
+### מודול WooCommerce
+מודול זה מכיל את הלוגיקה לעבודה עם חנות WooCommerce. הוא אחראי על:
+- ניהול מוצרים
+- ניהול הזמנות
+- ניהול לקוחות
+- ניהול מלאי
+
+### מודול הקשר (Context)
+מודול זה מכיל את הלוגיקה לניהול הקשר השיחה. הוא אחראי על:
+- הבנת הקשר השיחה
+- זיהוי אזכורים קודמים
+- פתרון כינויי גוף והתייחסויות עקיפות
+
+### מודול פירוק שאילתות (Query Parser)
+מודול זה מכיל את הלוגיקה לפירוק שאילתות מורכבות. הוא אחראי על:
+- זיהוי מחברים לוגיים
+- פירוק שאילתות מורכבות למשימות פשוטות
+- טיפול בשאלות השוואתיות והיפותטיות
+
+### מודול יצירת תשובות (Response Generator)
+מודול זה מכיל את הלוגיקה ליצירת תשובות בשפה טבעית. הוא אחראי על:
+- יצירת תשובות מותאמות לכוונת המשתמש
+- שילוב אימוג'ים ופורמט מתאים
+- הוספת וריאציות לשוניות למניעת חזרתיות
+
+### מודול למידה והשתפרות (Learning Manager)
+מודול זה מכיל את הלוגיקה לתיעוד אינטראקציות ולמידה מתמדת. הוא אחראי על:
+- תיעוד אינטראקציות עם המשתמש
+- זיהוי אינטראקציות בעייתיות
+- יצירת דוחות תקופתיים על ביצועי הסוכן
+- עדכון אוטומטי של מילות מפתח בהתבסס על אינטראקציות מוצלחות
 
 </div> 
