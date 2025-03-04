@@ -30,6 +30,64 @@ from src.tools.intent.intent_recognizer import (
     SPECIFIC_INTENTS
 )
 
+from .recognizers.base_recognizer import BaseIntentRecognizer
+from .learning.intent_learner import IntentLearner
+from .config.intent_config import (
+    GENERAL_SETTINGS,
+    INTENT_KEYWORDS,
+    INTENT_PATTERNS,
+    get_all_keywords,
+    save_custom_keywords
+)
+
+# יצירת מופע יחיד של המזהה ומנהל הלמידה
+intent_recognizer = BaseIntentRecognizer()
+intent_learner = IntentLearner()
+
+def identify_intent(text: str) -> tuple[str, str, float]:
+    """
+    זיהוי כוונה מתוך טקסט
+    
+    Args:
+        text: הטקסט לזיהוי
+        
+    Returns:
+        סוג הכוונה, הפעולה הספציפית, וציון הביטחון
+    """
+    return intent_recognizer.identify_intent(text)
+
+def learn_from_feedback(text: str, predicted: tuple[str, str], correct: tuple[str, str]) -> None:
+    """
+    למידה מפידבק משתמש
+    
+    Args:
+        text: הטקסט המקורי
+        predicted: הכוונה והפעולה שזוהו (כוונה, פעולה)
+        correct: הכוונה והפעולה הנכונות (כוונה, פעולה)
+    """
+    intent_learner.learn_from_feedback(text, predicted, correct)
+
+def learn_from_examples(examples: list[tuple[str, str, str]]) -> None:
+    """
+    למידה מדוגמאות מתויגות
+    
+    Args:
+        examples: רשימה של טאפלים (טקסט, כוונה, פעולה)
+    """
+    intent_learner.learn_from_examples(examples)
+
+def analyze_learning_history(days: int = 7) -> dict:
+    """
+    ניתוח היסטוריית הלמידה
+    
+    Args:
+        days: מספר הימים לניתוח
+        
+    Returns:
+        סטטיסטיקות על הלמידה
+    """
+    return intent_learner.analyze_learning_history(days)
+
 __all__ = [
     # מזיהוי כוונות יצירת מוצר
     'extract_product_data',
@@ -51,5 +109,17 @@ __all__ = [
     'get_intent_description',
     'extract_parameters_by_intent',
     'calculate_intent_score',
-    'SPECIFIC_INTENTS'
+    'SPECIFIC_INTENTS',
+
+    'BaseIntentRecognizer',
+    'IntentLearner',
+    'GENERAL_SETTINGS',
+    'INTENT_KEYWORDS',
+    'INTENT_PATTERNS',
+    'get_all_keywords',
+    'save_custom_keywords',
+    'identify_intent',
+    'learn_from_feedback',
+    'learn_from_examples',
+    'analyze_learning_history'
 ] 

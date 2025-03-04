@@ -1,0 +1,113 @@
+conversations:
+  greetings:
+    welcome: |
+      👋 שלום {name}!
+      אני כאן כדי לעזור לך בניהול החנות שלך.
+      אשמח לסייע בכל נושא: מוצרים, הזמנות, לקוחות, מלאי ודוחות.
+      
+      הקלד /help לרשימת הפקודות הזמינות.
+    
+    welcome_back: |
+      👋 ברוך שובך {name}!
+      מה אוכל לעזור לך היום?
+    
+    goodbye: |
+      👋 להתראות {name}!
+      אשמח לעזור לך שוב בפעם הבאה.
+    
+    thanks: |
+      😊 בשמחה!
+      אשמח לעזור בכל דבר נוסף.
+
+  confirmations:
+    general: |
+      האם אתה בטוח שברצונך {action}?
+      
+      הקלד 'כן' לאישור או 'לא' לביטול.
+    
+    delete: |
+      ⚠️ שים לב!
+      האם אתה בטוח שברצונך למחוק את {item}?
+      פעולה זו אינה ניתנת לביטול!
+      
+      הקלד 'כן' לאישור או 'לא' לביטול.
+    
+    cancel_order: |
+      ⚠️ שים לב!
+      האם אתה בטוח שברצונך לבטל את הזמנה #{order_id}?
+      
+      הקלד 'כן' לאישור או 'לא' לביטול.
+    
+    refund: |
+      ⚠️ שים לב!
+      האם אתה בטוח שברצונך לבצע החזר כספי בסך ₪{amount} להזמנה #{order_id}?
+      
+      הקלד 'כן' לאישור או 'לא' לביטול.
+
+  prompts:
+    ask_details: |
+      אנא ספק את הפרטים הבאים:
+      {fields}
+    
+    missing_info: |
+      חסרים הפרטים הבאים:
+      {missing_fields}
+      
+      אנא השלם אותם.
+    
+    invalid_input: |
+      ⚠️ הקלט שהוזן אינו תקין:
+      {error_details}
+      
+      אנא נסה שוב.
+    
+    choose_option: |
+      בחר אחת מהאפשרויות הבאות:
+      {options}
+    
+    confirm_action: |
+      האם לבצע את הפעולה?
+      
+      פרטי הפעולה:
+      {action_details}
+      
+      הקלד 'כן' לאישור או 'לא' לביטול.
+
+  context:
+    previous_conversation: |
+      בהמשך לשיחתנו הקודמת בנושא {topic}...
+    
+    related_items: |
+      מצאתי פריטים קשורים שעשויים לעניין אותך:
+      {items}
+    
+    suggestions: |
+      💡 הצעות נוספות:
+      {suggestions}
+
+  help:
+    general: |
+      במה אוכל לעזור?
+      
+      אני יכול לסייע ב:
+      - ניהול מוצרים
+      - טיפול בהזמנות
+      - ניהול לקוחות
+      - מעקב מלאי
+      - הפקת דוחות
+      
+      הקלד /help לרשימת הפקודות המלאה.
+    
+    specific_topic: |
+      עזרה בנושא {topic}:
+      
+      {help_content}
+      
+      האם יש משהו ספציפי שתרצה לדעת?
+    
+    examples: |
+      הנה כמה דוגמאות לשימוש:
+      
+      {examples}
+      
+      נסה אחת מהדוגמאות או שאל שאלה משלך. 

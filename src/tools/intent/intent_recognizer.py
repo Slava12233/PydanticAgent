@@ -8,6 +8,10 @@ import logging
 import re
 from typing import Dict, List, Any, Optional, Tuple, Set, Union
 import json
+import os
+import yaml
+import logfire
+from difflib import SequenceMatcher
 
 from src.tools.intent.product_intent import (
     is_product_creation_intent,
@@ -690,3 +694,159 @@ def extract_parameters_by_intent(text: str, task_type: str, intent_type: str) ->
     
     # אם לא זוהו פרמטרים ספציפיים, נחזיר מילון ריק
     return {}
+
+class IntentRecognizer:
+    """מזהה כוונות המשתמש"""
+    
+    def __init__(self):
+        """אתחול מזהה הכוונות"""
+        self.keywords = {}
+        self._load_keywords()
+        
+    def _load_keywords(self):
+        """טעינת מילות המפתח מקובץ ההגדרות"""
+        try:
+            # קריאת קובץ מילות המפתח
+            keywords_path = os.path.join(os.path.dirname(__file__), 'keywords.yaml')
+            with open(keywords_path, 'r', encoding='utf-8') as f:
+                self.keywords = yaml.safe_load(f)
+                
+            logfire.info('keywords_loaded', count=len(self.keywords))
+        except Exception as e:
+            logfire.error('keywords_loading_error', error=str(e))
+            raise RuntimeError(f"שגיאה בטעינת מילות המפתח: {e}")
+    
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """
+        חישוב מידת הדמיון בין שתי מחרוזות
+        
+        Args:
+            text1: מחרוזת ראשונה
+            text2: מחרוזת שנייה
+            
+        Returns:
+            מידת הדמיון (0-1)
+        """
+        return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+    
+    def _find_best_match(self, text: str, keywords: List[str]) -> Tuple[str, float]:
+        """
+        מציאת ההתאמה הטובה ביותר מתוך רשימת מילות מפתח
+        
+        Args:
+            text: הטקסט לחיפוש
+            keywords: רשימת מילות מפתח
+            
+        Returns:
+            מילת המפתח המתאימה ביותר וציון ההתאמה
+        """
+        best_match = ""
+        best_score = 0.0
+        
+        for keyword in keywords:
+            score = self._calculate_similarity(text, keyword)
+            if score > best_score:
+                best_score = score
+                best_match = keyword
+                
+        return best_match, best_score
+    
+    def _get_task_type_score(self, text: str, task_type: str) -> float:
+        """
+        חישוב ציון ההתאמה לסוג משימה
+        
+        Args:
+            text: הטקסט לבדיקה
+            task_type: סוג המשימה
+            
+        Returns:
+            ציון ההתאמה
+        """
+        task_keywords = self.keywords['task_types'][task_type]['keywords']
+        _, score = self._find_best_match(text, task_keywords)
+        return score
+    
+    def _get_intent_score(self, text: str, task_type: str, intent: str) -> float:
+        """
+        חישוב ציון ההתאמה לכוונה ספציפית
+        
+        Args:
+            text: הטקסט לבדיקה
+            task_type: סוג המשימה
+            intent: הכוונה הספציפית
+            
+        Returns:
+            ציון ההתאמה
+        """
+        intent_keywords = self.keywords['task_types'][task_type]['intents'][intent]['keywords']
+        _, score = self._find_best_match(text, intent_keywords)
+        return score
+    
+    def identify_intent(self, text: str) -> Tuple[str, str, float]:
+        """
+        זיהוי כוונת המשתמש מתוך טקסט
+        
+        Args:
+            text: הטקסט לזיהוי
+            
+        Returns:
+            סוג המשימה, הכוונה הספציפית וציון הביטחון
+        """
+        best_task_type = "general"
+        best_intent = "general"
+        best_score = 0.0
+        
+        # בדיקת כל סוגי המשימות
+        for task_type in self.keywords['task_types']:
+            # חישוב ציון לסוג המשימה
+            task_score = self._get_task_type_score(text, task_type)
+            
+            # אם נמצאה התאמה טובה, בדיקת כוונות ספציפיות
+            if task_score > 0.6:
+                for intent in self.keywords['task_types'][task_type].get('intents', {}):
+                    intent_score = self._get_intent_score(text, task_type, intent)
+                    
+                    # שקלול הציונים
+                    combined_score = (task_score + intent_score) / 2
+                    if combined_score > best_score:
+                        best_score = combined_score
+                        best_task_type = task_type
+                        best_intent = intent
+        
+        logfire.info('intent_identified', 
+                    task_type=best_task_type,
+                    intent=best_intent,
+                    score=best_score,
+                    text=text[:100])
+                    
+        return best_task_type, best_intent, best_score * 20  # המרה לסקלה של 0-20
+
+    def get_suggested_responses(self, task_type: str, intent: str) -> List[str]:
+        """
+        קבלת תשובות מוצעות לכוונה ספציפית
+        
+        Args:
+            task_type: סוג המשימה
+            intent: הכוונה הספציפית
+            
+        Returns:
+            רשימת תשובות מוצעות
+        """
+        # TODO: להוסיף תשובות מוצעות לכל כוונה
+        return []
+    
+    def learn_from_interaction(self, text: str, task_type: str, intent: str, success: bool):
+        """
+        למידה מאינטראקציה עם המשתמש
+        
+        Args:
+            text: הטקסט המקורי
+            task_type: סוג המשימה שזוהה
+            intent: הכוונה שזוהתה
+            success: האם הזיהוי היה מוצלח
+        """
+        # TODO: להוסיף מנגנון למידה מאינטראקציות
+        pass
+
+# יצירת מופע גלובלי של מזהה הכוונות
+intent_recognizer = IntentRecognizer()

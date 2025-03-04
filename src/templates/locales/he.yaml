@@ -1,0 +1,100 @@
+# תבניות תשובה בעברית
+common:
+  greeting: "שלום {name}! איך אני יכול לעזור לך היום?"
+  goodbye: "להתראות! אשמח לעזור לך שוב בפעם הבאת."
+  error: "מצטער, אבל נתקלתי בבעיה. {error_message}"
+  success: "מצוין! {success_message}"
+  confirmation: "האם אתה בטוח שברצונך {action}?"
+  yes: "כן"
+  no: "לא"
+  cancel: "ביטול"
+  back: "חזרה"
+  next: "הבא"
+  done: "סיום"
+
+store:
+  products:
+    not_found: "לא נמצא מוצר עם המזהה {id}"
+    added: "המוצר {name} נוסף בהצלחה"
+    updated: "המוצר {name} עודכן בהצלחה"
+    deleted: "המוצר {name} נמחק בהצלחה"
+    list_header: "מוצרים בחנות:"
+    product_details: |
+      🏷️ {name}
+      💰 מחיר: ₪{price}
+      📦 מלאי: {stock}
+      📝 תיאור: {description}
+    low_stock: "⚠️ שים לב: המלאי של {name} נמוך ({stock} יחידות)"
+    out_of_stock: "❌ המוצר {name} אזל מהמלאי"
+
+  orders:
+    not_found: "לא נמצאה הזמנה עם המזהה {id}"
+    created: "ההזמנה {id} נוצרה בהצלחה"
+    updated: "ההזמנה {id} עודכנה בהצלחה"
+    cancelled: "ההזמנה {id} בוטלה בהצלחה"
+    list_header: "הזמנות:"
+    order_details: |
+      🛍️ הזמנה #{id}
+      👤 לקוח: {customer_name}
+      💰 סכום: ₪{total}
+      📦 מצב: {status}
+      📅 תאריך: {date}
+    status:
+      pending: "ממתינה לאישור"
+      processing: "בטיפול"
+      completed: "הושלמה"
+      cancelled: "בוטלה"
+      refunded: "זוכתה"
+
+  customers:
+    not_found: "לא נמצא לקוח עם המזהה {id}"
+    added: "הלקוח {name} נוסף בהצלחה"
+    updated: "פרטי הלקוח {name} עודכנו בהצלחה"
+    deleted: "הלקוח {name} נמחק בהצלחה"
+    list_header: "לקוחות:"
+    customer_details: |
+      👤 {name}
+      📧 אימייל: {email}
+      📱 טלפון: {phone}
+      📍 כתובת: {address}
+
+  inventory:
+    report_header: "דוח מלאי:"
+    summary: |
+      📊 סיכום מלאי:
+      📦 סה"כ מוצרים: {total_products}
+      💰 ערך מלאי כולל: ₪{total_value}
+      ⚠️ מוצרים במלאי נמוך: {low_stock_count}
+      ❌ מוצרים שאזלו: {out_of_stock_count}
+    forecast: |
+      📈 תחזית מלאי ל-{days} ימים:
+      📦 מלאי נוכחי: {current_stock}
+      📉 קצב מכירות יומי: {daily_sales}
+      ⚠️ ימים עד אזילת מלאי: {days_until_stockout}
+
+admin:
+  settings:
+    saved: "ההגדרות נשמרו בהצלחה"
+    error: "שגיאה בשמירת ההגדרות: {error}"
+    current: |
+      ⚙️ הגדרות נוכחיות:
+      🔔 התראות: {notifications}
+      🕒 אזור זמן: {timezone}
+      💬 שפה: {language}
+
+  analytics:
+    report_header: "דוח ביצועים:"
+    summary: |
+      📊 סיכום:
+      💰 מכירות: ₪{sales}
+      📦 הזמנות: {orders}
+      👥 לקוחות חדשים: {new_customers}
+      📈 גידול: {growth}%
+
+errors:
+  general: "אירעה שגיאה לא צפויה. אנא נסה שוב מאוחר יותר."
+  validation: "אחד או יותר מהנתונים שהוזנו אינם תקינים: {details}"
+  permission: "אין לך הרשאות מתאימות לביצוע פעולה זו."
+  not_found: "הפריט המבוקש לא נמצא."
+  connection: "אירעה שגיאת התחברות. אנא בדוק את החיבור שלך ונסה שוב."
+  timeout: "הפעולה ארכה זמן רב מדי. אנא נסה שוב." 

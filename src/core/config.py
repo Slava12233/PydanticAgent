@@ -10,6 +10,7 @@ load_dotenv()
 # הגדרות טלגרם
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
+PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN")  # טוקן לספק תשלומים של טלגרם
 
 # הגדרות OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")

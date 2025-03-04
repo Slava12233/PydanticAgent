@@ -181,7 +181,6 @@ class RAGService:
         """
         try:
             from sqlalchemy import text
-            import numpy as np
             
             # אתחול מסד הנתונים אם צריך
             if db.engine is None:
@@ -192,90 +191,84 @@ class RAGService:
             # קבלת embedding עבור השאילתה
             query_embedding = await self._get_embedding(query)
             
-            # ביצוע החיפוש במסד הנתונים - גישה פשוטה יותר
+            # ביצוע חיפוש יעיל באמצעות pgvector
             session = await db.get_session()
             try:
-                # שאילתה פשוטה שמחזירה את כל הקטעים
+                # שאילתה עם חישוב דמיון ב-PostgreSQL
                 sql = text("""
+                WITH similarity_results AS (
+                    SELECT 
+                        dc.id as chunk_id,
+                        dc.content,
+                        d.id as document_id,
+                        d.title,
+                        d.source,
+                        d.doc_metadata as document_metadata,
+                        dc.metadata as chunk_metadata,
+                        1 - (dc.embedding <=> :query_embedding) as similarity  -- חישוב דמיון קוסינוס
+                    FROM 
+                        document_chunks dc
+                    JOIN 
+                        documents d ON dc.document_id = d.id
+                    WHERE 
+                        1 - (dc.embedding <=> :query_embedding) >= :min_similarity
+                    ORDER BY 
+                        similarity DESC
+                    LIMIT :limit
+                )
                 SELECT 
-                    dc.id as chunk_id,
-                    dc.content,
-                    dc.embedding,
-                    d.id as document_id,
-                    d.title,
-                    d.source,
-                    d.doc_metadata as document_metadata,
-                    dc.chunk_index as chunk_metadata
+                    *,
+                    similarity * 100 as similarity_percentage
                 FROM 
-                    document_chunks dc
-                JOIN 
-                    documents d ON dc.document_id = d.id
-                WHERE 
-                    dc.embedding IS NOT NULL
+                    similarity_results
                 """)
                 
-                # ביצוע השאילתה
-                result = await session.execute(sql)
-                rows = result.fetchall()
+                # ביצוע השאילתה עם הפרמטרים
+                result = await session.execute(
+                    sql,
+                    {
+                        "query_embedding": query_embedding,
+                        "min_similarity": min_similarity,
+                        "limit": limit
+                    }
+                )
                 
-                logger.info(f"נמצאו {len(rows)} קטעים במסד הנתונים")
-                
-                # חישוב דמיון קוסינוס בקוד Python
-                chunks_with_similarity = []
-                for row in rows:
-                    # חישוב דמיון קוסינוס בין וקטורים
-                    similarity = 0
-                    if row.embedding:
-                        try:
-                            # המרה לנומפיי
-                            v1 = np.array(query_embedding)
-                            v2 = np.array(row.embedding)
-                            
-                            # חישוב דמיון קוסינוס
-                            dot_product = np.dot(v1, v2)
-                            norm_v1 = np.linalg.norm(v1)
-                            norm_v2 = np.linalg.norm(v2)
-                            
-                            similarity = dot_product / (norm_v1 * norm_v2) if norm_v1 * norm_v2 > 0 else 0
-                        except Exception as e:
-                            logger.warning(f"שגיאה בחישוב דמיון: {str(e)}")
-                    
+                # עיבוד התוצאות
+                search_results = []
+                for row in result:
                     # טיפול במטא-דאטה
                     try:
-                        if isinstance(row.document_metadata, dict):
-                            doc_metadata = row.document_metadata
-                        else:
-                            doc_metadata = json.loads(row.document_metadata) if row.document_metadata else {}
-                        
-                        # שימוש ב-chunk_index במקום metadata
-                        chunk_metadata = {"index": row.chunk_metadata} if row.chunk_metadata is not None else {}
+                        doc_metadata = (
+                            row.document_metadata if isinstance(row.document_metadata, dict)
+                            else json.loads(row.document_metadata) if row.document_metadata
+                            else {}
+                        )
+                        chunk_metadata = (
+                            row.chunk_metadata if isinstance(row.chunk_metadata, dict)
+                            else json.loads(row.chunk_metadata) if row.chunk_metadata
+                            else {}
+                        )
                     except Exception as e:
-                        logger.warning(f"שגיאה בהמרת מטא-דאטה בחיפוש: {str(e)}")
+                        logger.warning(f"שגיאה בהמרת מטא-דאטה: {str(e)}")
                         doc_metadata = {}
                         chunk_metadata = {}
                     
-                    # דילוג על תוצאות מתחת לסף המינימלי
-                    if similarity < min_similarity:
-                        continue
-                    
                     # הוספת התוצאה לרשימה
-                    chunks_with_similarity.append({
+                    search_results.append({
                         "content": row.content,
                         "document_id": row.document_id,
                         "chunk_id": row.chunk_id,
                         "title": row.title,
-                        "similarity": similarity,
-                        "similarity_percentage": round(similarity * 100, 2),
+                        "similarity": row.similarity,
+                        "similarity_percentage": round(row.similarity_percentage, 2),
                         "source": row.source or doc_metadata.get("source", "לא ידוע"),
                         "document_metadata": doc_metadata,
                         "chunk_metadata": chunk_metadata
                     })
                 
-                # מיון לפי דמיון והגבלה למספר התוצאות הרצוי
-                search_results = sorted(chunks_with_similarity, key=lambda x: x["similarity"], reverse=True)[:limit]
-                
                 logger.info(f"נמצאו {len(search_results)} תוצאות חיפוש רלוונטיות")
                 return search_results
+                
             except Exception as e:
                 logger.error(f"שגיאה בחיפוש מסמכים: {str(e)}")
                 raise

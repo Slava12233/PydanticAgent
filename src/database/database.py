@@ -11,7 +11,7 @@ from sqlalchemy.future import select
 import asyncpg
 import openai
 from pgvector.sqlalchemy import Vector
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 import logging
 import traceback
 
@@ -578,31 +578,29 @@ class Database:
 
     @contextmanager
     def Session(self):
-        """
-        מנהל הקשר לשימוש בסשן
-        """
-        if self.engine is None:
-            self.init_db()
-        
-        session = self.SessionLocal()
+        """מנהל הקשר לסשן סינכרוני"""
+        session = self.Session()
         try:
             yield session
             session.commit()
-        except:
+        except Exception as e:
             session.rollback()
-            raise
+            raise e
         finally:
             session.close()
     
+    @asynccontextmanager
     async def get_session(self):
-        """
-        מחזיר אובייקט סשן אסינכרוני לשימוש עם async with
-        """
-        if self.async_engine is None:
-            self.init_db()
-        
-        # מחזיר את האובייקט AsyncSession ישירות
-        return self.AsyncSession()
+        """מנהל הקשר לסשן אסינכרוני"""
+        session = self.AsyncSession()
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
 
     async def get_conversation_messages(self, conversation_id: int, limit: int = 10, session = None) -> List[Message]:
         """

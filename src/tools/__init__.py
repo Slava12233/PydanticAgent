@@ -27,27 +27,17 @@ from src.tools.intent import (
     SPECIFIC_INTENTS
 )
 
-# ייבוא פונקציות ממנהלי משאבים
-from src.tools.managers import (
-    # ממנהל מוצרים
-    ProductManager,
-    create_product_from_text,
-    format_product_for_display,
-    update_product_from_text,
-    search_products_by_text,
-    
-    # ממנהל הזמנות
-    format_order_for_display,
-    format_orders_list_for_display,
-    get_orders,
-    get_order,
-    update_order_status,
-    cancel_order,
-    refund_order
-)
+# ייבוא מנהלים מ-store_tools
+from src.tools.store_tools.managers.product_manager import ProductManager
+from src.tools.store_tools.managers.order_manager import OrderManager
+from src.tools.store_tools.managers.customer_manager import CustomerManager
+from src.tools.store_tools.managers.inventory_manager import InventoryManager
+from src.tools.store_tools.managers.inventory_forecasting import InventoryForecasting
+from src.tools.store_tools.managers.inventory_reporting import InventoryReporting
+from src.tools.store_tools.managers.product_categories import ProductCategories
 
 # ייבוא פונקציות מכלי WooCommerce
-from src.tools.woocommerce_tools import (
+from src.tools.store_tools.woocommerce_tools import (
     get_woocommerce_api,
     CachedWooCommerceAPI,
     get_cached_woocommerce_api,
@@ -60,7 +50,7 @@ from src.tools.woocommerce_tools import (
 )
 
 # ייבוא תבניות WooCommerce
-from src.tools.woocommerce_templates import (
+from src.tools.store_tools.woocommerce_templates import (
     TEMPLATES,
     get_template
 )
@@ -91,12 +81,14 @@ __all__ = [
     'calculate_intent_score',
     'SPECIFIC_INTENTS',
     
-    # ממנהל מוצרים
+    # ממנהלי store_tools
     'ProductManager',
-    'create_product_from_text',
-    'format_product_for_display',
-    'update_product_from_text',
-    'search_products_by_text',
+    'OrderManager',
+    'CustomerManager',
+    'InventoryManager',
+    'InventoryForecasting',
+    'InventoryReporting',
+    'ProductCategories',
     
     # מזיהוי כוונות ניהול הזמנות
     'is_order_management_intent',
@@ -105,15 +97,6 @@ __all__ = [
     'extract_date_range',
     'extract_order_filters',
     'generate_order_management_questions',
-    
-    # ממנהל הזמנות
-    'format_order_for_display',
-    'format_orders_list_for_display',
-    'get_orders',
-    'get_order',
-    'update_order_status',
-    'cancel_order',
-    'refund_order',
     
     # מכלי WooCommerce
     'get_woocommerce_api',

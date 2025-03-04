@@ -1,0 +1,189 @@
+responses:
+  product:
+    created: |
+      ✅ המוצר {name} נוצר בהצלחה!
+      פרטי המוצר:
+      🏷️ מזהה: {id}
+      💰 מחיר: ₪{price}
+      📦 מלאי: {stock} יחידות
+      
+    updated: |
+      ✅ המוצר {name} עודכן בהצלחה!
+      השינויים שבוצעו:
+      {changes}
+      
+    deleted: |
+      ✅ המוצר {name} נמחק בהצלחה.
+      
+    not_found: |
+      ❌ לא נמצא מוצר עם המזהה {id}.
+      
+    list: |
+      📋 רשימת המוצרים:
+      {products}
+      
+    details: |
+      🏷️ {name}
+      💰 מחיר: ₪{price}
+      📦 מלאי: {stock} יחידות
+      📝 תיאור: {description}
+      🏷️ קטגוריות: {categories}
+      
+    low_stock: |
+      ⚠️ שים לב!
+      המוצר {name} במלאי נמוך ({stock} יחידות).
+      מומלץ להזמין מלאי נוסף.
+
+  order:
+    created: |
+      ✅ ההזמנה נוצרה בהצלחה!
+      🛍️ מספר הזמנה: #{id}
+      👤 לקוח: {customer_name}
+      💰 סכום כולל: ₪{total}
+      
+    updated: |
+      ✅ ההזמנה #{id} עודכנה בהצלחה!
+      📦 סטטוס חדש: {status}
+      
+    cancelled: |
+      ✅ ההזמנה #{id} בוטלה בהצלחה.
+      
+    refunded: |
+      ✅ בוצע החזר כספי להזמנה #{id}
+      💰 סכום ההחזר: ₪{amount}
+      
+    not_found: |
+      ❌ לא נמצאה הזמנה עם המספר #{id}.
+      
+    list: |
+      📋 רשימת ההזמנות:
+      {orders}
+      
+    details: |
+      🛍️ הזמנה #{id}
+      👤 לקוח: {customer_name}
+      💰 סכום כולל: ₪{total}
+      📦 סטטוס: {status}
+      📅 תאריך: {date}
+      
+      פריטים בהזמנה:
+      {items}
+      
+      פרטי משלוח:
+      📍 כתובת: {shipping_address}
+      📦 שיטת משלוח: {shipping_method}
+      💳 שיטת תשלום: {payment_method}
+
+  customer:
+    created: |
+      ✅ הלקוח {name} נוצר בהצלחה!
+      מזהה: {id}
+      
+    updated: |
+      ✅ פרטי הלקוח {name} עודכנו בהצלחה!
+      השינויים שבוצעו:
+      {changes}
+      
+    deleted: |
+      ✅ הלקוח {name} נמחק בהצלחה.
+      
+    not_found: |
+      ❌ לא נמצא לקוח עם המזהה {id}.
+      
+    list: |
+      📋 רשימת הלקוחות:
+      {customers}
+      
+    details: |
+      👤 {name}
+      📧 אימייל: {email}
+      📱 טלפון: {phone}
+      📍 כתובת: {address}
+      
+      היסטוריית הזמנות:
+      {order_history}
+
+  inventory:
+    updated: |
+      ✅ המלאי עודכן בהצלחה!
+      מוצר: {product_name}
+      כמות חדשה: {new_quantity} יחידות
+      
+    report: |
+      📊 דוח מלאי:
+      
+      סיכום:
+      📦 סה"כ מוצרים: {total_products}
+      💰 ערך מלאי: ₪{total_value}
+      ⚠️ מוצרים במלאי נמוך: {low_stock_count}
+      ❌ מוצרים שאזלו: {out_of_stock_count}
+      
+      מוצרים במלאי נמוך:
+      {low_stock_products}
+      
+      מוצרים שאזלו:
+      {out_of_stock_products}
+      
+    forecast: |
+      📈 תחזית מלאי:
+      
+      מוצר: {product_name}
+      📦 מלאי נוכחי: {current_stock} יחידות
+      📉 קצב מכירות יומי: {daily_sales} יחידות
+      ⏳ ימים עד אזילת מלאי: {days_until_stockout}
+      📊 המלצה להזמנה: {recommended_order} יחידות
+
+  analytics:
+    sales_report: |
+      📊 דוח מכירות:
+      
+      תקופה: {date_range}
+      
+      סיכום:
+      💰 סה"כ מכירות: ₪{total_sales}
+      📦 מספר הזמנות: {total_orders}
+      👥 לקוחות חדשים: {new_customers}
+      
+      מוצרים מובילים:
+      {top_products}
+      
+      קטגוריות מובילות:
+      {top_categories}
+      
+    performance_report: |
+      📈 דוח ביצועים:
+      
+      תקופה: {date_range}
+      
+      מדדים:
+      💰 ממוצע להזמנה: ₪{average_order_value}
+      📊 שיעור המרה: {conversion_rate}%
+      🔄 שיעור החזרות: {return_rate}%
+      
+      השוואה לתקופה קודמת:
+      {comparison}
+
+errors:
+  validation: |
+    ❌ שגיאת אימות:
+    {details}
+    
+  permission: |
+    ❌ אין לך הרשאה לבצע פעולה זו.
+    אנא פנה למנהל המערכת.
+    
+  connection: |
+    ❌ שגיאת התחברות:
+    לא ניתן להתחבר לשרת.
+    אנא נסה שוב מאוחר יותר.
+    
+  timeout: |
+    ❌ תם הזמן הקצוב לפעולה.
+    אנא נסה שוב.
+    
+  not_found: |
+    ❌ הפריט המבוקש לא נמצא.
+    
+  general: |
+    ❌ אירעה שגיאה לא צפויה.
+    אנא נסה שוב מאוחר יותר. 

@@ -4,6 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, time
 
 from src.database.models import User, UserRole, Document, DocumentChunk, Message, WooCommerceStore, WooCommerceProduct, WooCommerceOrder, WooCommerceOrderItem
+from src.utils.logger import setup_logger
+
+# Configure logging
+logger = setup_logger('database_operations')
 
 async def get_all_users(session: AsyncSession) -> List[User]:
     """
@@ -104,9 +108,9 @@ async def get_user_by_telegram_id(telegram_id: int, session: AsyncSession) -> Op
     מחזיר משתמש לפי מזהה טלגרם
     """
     result = await session.execute(
-        select(User).where(User.id == telegram_id)
+        select(User).where(User.telegram_id == telegram_id)
     )
-    return result.scalars().first()
+    return await result.scalar()
 
 # פונקציות לניהול חנויות ווקומרס
 
@@ -377,4 +381,39 @@ async def update_user(user: User, session: AsyncSession) -> User:
     """
     session.add(user)
     await session.commit()
-    return user 
+    return user
+
+async def create_user(
+    session: AsyncSession,
+    telegram_id: int,
+    username: str = None,
+    first_name: str = None,
+    last_name: str = None
+) -> Optional[User]:
+    """
+    יצירת משתמש חדש
+    
+    Args:
+        session: סשן בסיס נתונים
+        telegram_id: מזהה טלגרם
+        username: שם משתמש (אופציונלי)
+        first_name: שם פרטי (אופציונלי)
+        last_name: שם משפחה (אופציונלי)
+        
+    Returns:
+        משתמש חדש אם נוצר בהצלחה, אחרת None
+    """
+    try:
+        user = User(
+            telegram_id=telegram_id,
+            username=username,
+            first_name=first_name,
+            last_name=last_name
+        )
+        session.add(user)
+        await session.commit()
+        return user
+    except Exception as e:
+        logger.error(f"Error creating user {telegram_id}: {e}")
+        await session.rollback()
+        return None 

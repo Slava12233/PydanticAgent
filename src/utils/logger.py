@@ -90,7 +90,7 @@ def log_database_operation(logger, operation, params=None, result=None, error=No
     
     return log_data
 
-def log_telegram_message(logger, user_id, message_text, response=None, error=None):
+async def log_telegram_message(logger, user_id: str, message_text: str, response: str = None, error: Exception = None):
     """תיעוד הודעות טלגרם"""
     log_data = {
         'user_id': user_id,

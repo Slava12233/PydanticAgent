@@ -1,0 +1,156 @@
+# English translations
+
+# System message templates
+system:
+  welcome: |
+    Welcome to {bot_name}! 🤖
+    I'm here to help you manage your store.
+    Use the /help command to see all available commands.
+
+  help: |
+    *🤖 Available Commands:*
+
+    🏪 *Store Management:*
+    /store_dashboard - Store dashboard
+    /connect_store - Connect new store
+
+    📦 *Product Management:*
+    /create_product - Create new product
+    /manage_products - Manage products
+
+    📝 *Order Management:*
+    /manage_orders - Manage orders
+    /order_stats - Order statistics
+
+    📚 *Knowledge Base:*
+    /add_document - Add document
+    /search - Search knowledge base
+    /list_documents - List documents
+
+    📊 *General:*
+    /stats - Show statistics
+    /clear - Clear chat history
+    /help - Show this help
+
+  error:
+    general: |
+      Sorry, an unexpected error occurred.
+      Please try again later.
+
+    not_found: |
+      Sorry, I couldn't find what you were looking for.
+      Please check your input and try again.
+
+    permission: |
+      Sorry, you don't have permission to perform this action.
+      Please contact your system administrator.
+
+    validation: |
+      Sorry, the data you entered is invalid.
+      Please check your input and try again.
+
+    timeout: |
+      Sorry, the operation took too long.
+      Please try again later.
+
+# Success message templates
+success:
+  general: |
+    ✅ *Success*
+    {message}
+
+  created: |
+    ✅ *Created Successfully*
+    {item_type} has been created successfully.
+    {details}
+
+  updated: |
+    ✅ *Updated Successfully*
+    {item_type} has been updated successfully.
+    {details}
+
+  deleted: |
+    ✅ *Deleted Successfully*
+    {item_type} has been deleted successfully.
+
+# Error message templates
+error:
+  general: |
+    ❌ *Error*
+    {message}
+
+  not_found: |
+    ❌ *Not Found*
+    The requested {item_type} was not found.
+
+  invalid_input: |
+    ❌ *Invalid Input*
+    {message}
+
+  permission_denied: |
+    ❌ *Permission Denied*
+    You don't have permission to perform this action.
+
+# Warning message templates
+warning:
+  general: |
+    ⚠️ *Warning*
+    {message}
+
+  low_stock: |
+    ⚠️ *Low Stock*
+    Product {product_name} is running low ({quantity} units remaining).
+
+  expiring_soon: |
+    ⚠️ *Expiring Soon*
+    Product {product_name} will expire on {expiry_date}.
+
+# Info message templates
+info:
+  general: |
+    ℹ️ *Information*
+    {message}
+
+  stats: |
+    📊 *Statistics*
+    
+    Total Messages: {total_messages}
+    Active Users: {active_users}
+    Today's Orders: {orders_today}
+    Today's Sales: {sales_today}
+
+  product: |
+    📦 *Product Details*
+    
+    Name: {name}
+    SKU: {sku}
+    Price: {price}
+    Stock: {stock}
+    Category: {category}
+
+  order: |
+    📝 *Order Details*
+    
+    Order Number: {order_id}
+    Status: {status}
+    Customer: {customer}
+    Total: {total}
+    Date: {date}
+
+# Prompt templates
+prompt:
+  general: |
+    {message}
+    Please enter your response:
+
+  confirmation: |
+    Are you sure you want to {action}?
+    Type 'yes' to confirm or 'no' to cancel.
+
+  select_option: |
+    Please select an option:
+    {options}
+
+  enter_details: |
+    Please enter the following details:
+    {fields} 
