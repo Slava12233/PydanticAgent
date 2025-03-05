@@ -4,17 +4,39 @@
 """
 import os
 import sys
-import argparse
+import logging
 from datetime import datetime
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+# הגדרת לוגר
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # הוספת תיקיית הפרויקט לנתיב החיפוש
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.core.config import POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
-from src.database.models import Base, User, Conversation, Message
-from src.database.database import db
+from src.database.models import Base, User, Conversation, Message, UserRole
+
+def create_tables():
+    """יצירת כל הטבלאות הנדרשות"""
+    try:
+        # יצירת חיבור למסד הנתונים
+        db_url = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+        engine = create_engine(db_url)
+        
+        # מחיקת כל הטבלאות הקיימות
+        Base.metadata.drop_all(engine)
+        logger.info("כל הטבלאות הקיימות נמחקו")
+        
+        # יצירת כל הטבלאות מחדש
+        Base.metadata.create_all(engine)
+        logger.info("כל הטבלאות נוצרו מחדש בהצלחה")
+        
+    except Exception as e:
+        logger.error(f"שגיאה ביצירת טבלאות: {str(e)}")
+        raise
 
 def get_db_connection():
     """יצירת חיבור למסד הנתונים"""
@@ -128,7 +150,6 @@ def print_db_info():
     try:
         with db.Session() as session:
             # ספירת משתמשים
-            from src.database.models import User, UserRole
             user_count = session.query(User).count()
             admin_count = session.query(User).filter(User.role == UserRole.ADMIN).count()
             
@@ -137,7 +158,6 @@ def print_db_info():
             doc_count = session.query(Document).count()
             
             # ספירת הודעות
-            from src.database.models import Message
             message_count = session.query(Message).count()
             
             print("\n===== מידע על מסד הנתונים =====")
@@ -153,14 +173,9 @@ def print_db_info():
 def main():
     """פונקציה ראשית"""
     try:
-        # אתחול מסד הנתונים
-        db.init_db()
-        
-        # הפעלת מיגרציות
-        run_migrations()
-        
-        # הצגת מידע על מסד הנתונים
-        print_db_info()
+        # יצירת טבלאות
+        create_tables()
+        logger.info("תהליך המיגרציה הושלם בהצלחה")
         
     except Exception as e:
         logger.error(f"שגיאה: {str(e)}")

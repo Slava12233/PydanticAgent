@@ -2,18 +2,31 @@
 חבילת השירותים של WooCommerce.
 מייצאת את כל השירותים הזמינים לשימוש.
 """
-from .api.woocommerce_api import WooCommerceAPI
+from .api.woocommerce_api import (
+    WooCommerceAPI,
+    CachedWooCommerceAPI,
+    get_woocommerce_api,
+    get_cached_woocommerce_api
+)
 from .services.product_service import ProductService
 from .services.order_service import OrderService
 from .services.customer_service import CustomerService
 from .inventory.inventory_service import InventoryService
 from .inventory.forecasting_service import ForecastingService
 from .inventory.reporting_service import ReportingService
-from .data import get_order_status_info, get_woocommerce_knowledge_base
+from .data import (
+    get_order_status_info,
+    get_woocommerce_knowledge_base,
+    PRODUCT_TYPES,
+    ORDER_STATUSES
+)
 
 __all__ = [
     # שירותי API בסיסיים
     'WooCommerceAPI',
+    'CachedWooCommerceAPI',
+    'get_woocommerce_api',
+    'get_cached_woocommerce_api',
     
     # שירותים עיקריים
     'ProductService',
@@ -27,7 +40,12 @@ __all__ = [
     
     # פונקציות עזר ונתונים
     'get_order_status_info',
-    'get_woocommerce_knowledge_base'
+    'get_woocommerce_knowledge_base',
+    'PRODUCT_TYPES',
+    'ORDER_STATUSES',
+    
+    # מחלקה המרכזת את כל שירותי WooCommerce
+    'WooCommerceServices'
 ]
 
 class WooCommerceServices:
@@ -38,7 +56,7 @@ class WooCommerceServices:
     
     def __init__(
         self,
-        store_url: str,
+        url: str,
         consumer_key: str,
         consumer_secret: str
     ):
@@ -46,13 +64,13 @@ class WooCommerceServices:
         אתחול כל השירותים.
         
         Args:
-            store_url: כתובת הבסיס של החנות
+            url: כתובת הבסיס של החנות
             consumer_key: מפתח הצרכן
             consumer_secret: סוד הצרכן
         """
         # יצירת מופע של ה-API
         self.api = WooCommerceAPI(
-            store_url=store_url,
+            url=url,
             consumer_key=consumer_key,
             consumer_secret=consumer_secret
         )

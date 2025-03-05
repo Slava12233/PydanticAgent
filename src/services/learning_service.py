@@ -43,12 +43,11 @@ class LearningService:
             דפוסים שזוהו
         """
         try:
-            session = await db.get_session()
-            try:
+            async with db.get_session() as session:
                 # קבלת היסטוריית הודעות המשתמש
                 result = await session.execute(
                     text("""
-                    SELECT m.content, m.role, m.metadata, m.timestamp,
+                    SELECT m.content, m.role, m.timestamp,
                            c.context, c.summary
                     FROM messages m
                     JOIN conversations c ON m.conversation_id = c.id
@@ -91,6 +90,7 @@ class LearningService:
                             - language_preferences: העדפות שפה ומונחים
                             - interests: תחומי עניין עם משקלות (0-1)
                             - recurring_patterns: דפוסי שאלות חוזרים
+                            - greeting_patterns: דפוסי ברכה חוזרים
                             """
                         },
                         {
@@ -108,9 +108,6 @@ class LearningService:
                 
                 return patterns
                 
-            finally:
-                await session.close()
-                
         except Exception as e:
             logger.error(f"שגיאה בניתוח דפוסי משתמש: {str(e)}")
             return {}
@@ -123,8 +120,7 @@ class LearningService:
             user_id: מזהה המשתמש
         """
         try:
-            session = await db.get_session()
-            try:
+            async with db.get_session() as session:
                 # קבלת העדפות המשתמש
                 user_settings = await session.get(BotSettings, user_id)
                 if not user_settings or not user_settings.preferences:
@@ -148,17 +144,14 @@ class LearningService:
                             {
                                 "user_id": user_id,
                                 "topic": topic,
-                                "weight": 1 + (weight - 0.5) * 0.2  # התאמה עדינה של המשקל
+                                "weight": weight
                             }
                         )
                 
                 await session.commit()
                 
-            finally:
-                await session.close()
-                
         except Exception as e:
-            logger.error(f"שגיאה בעדכון משקלי זיכרונות: {str(e)}")
+            logger.error(f"שגיאה בעדכון משקלי זיכרון: {str(e)}")
     
     async def adapt_response_style(
         self,
@@ -176,8 +169,7 @@ class LearningService:
             תשובה מותאמת אישית
         """
         try:
-            session = await db.get_session()
-            try:
+            async with db.get_session() as session:
                 # קבלת העדפות המשתמש
                 user_settings = await session.get(BotSettings, user_id)
                 if not user_settings or not user_settings.preferences:
@@ -187,34 +179,32 @@ class LearningService:
                 
                 # התאמת התשובה באמצעות GPT
                 response = await self.openai_client.chat.completions.create(
-                    model="gpt-4-turbo-preview",
+                    model="gpt-3.5-turbo",
                     messages=[
                         {
                             "role": "system",
                             "content": f"""
-                            התאם את התשובה לסגנון המועדף על המשתמש.
+                            התאם את התשובה לסגנון המשתמש:
+                            - סגנון תקשורת: {preferences.get('response_style', 'formal')}
+                            - שפה: {preferences.get('language', 'he')}
+                            - תחומי עניין: {', '.join(preferences.get('interests', []))}
                             
-                            העדפות המשתמש:
-                            {json.dumps(preferences, indent=2, ensure_ascii=False)}
-                            
-                            שמור על התוכן המקורי אבל התאם את:
-                            1. סגנון השפה
-                            2. רמת הפירוט
-                            3. טון התקשורת
-                            4. שימוש במונחים מועדפים
+                            שמור על:
+                            1. אותו מידע מהתשובה המקורית
+                            2. התאמה לסגנון המועדף
+                            3. שימוש במונחים מתחומי העניין
+                            4. שמירה על טון מתאים
                             """
                         },
                         {
                             "role": "user",
-                            "content": original_response
+                            "content": f"התאם את התשובה הבאה: {original_response}"
                         }
                     ]
                 )
                 
-                return response.choices[0].message.content
-                
-            finally:
-                await session.close()
+                adapted_response = response.choices[0].message.content
+                return adapted_response.strip()
                 
         except Exception as e:
             logger.error(f"שגיאה בהתאמת סגנון תשובה: {str(e)}")

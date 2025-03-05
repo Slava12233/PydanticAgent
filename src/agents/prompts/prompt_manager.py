@@ -1,125 +1,106 @@
 """
-מודול לניהול פרומפטים
+מנהל פרומפטים
 """
 
 import os
 import yaml
-import logfire
-from typing import Optional, Dict, Any
+import logging
+from typing import Dict, Any, Optional
 
 class PromptManager:
-    """מנהל הפרומפטים של המערכת"""
-    
+    """מנהל פרומפטים"""
+
     def __init__(self):
         """אתחול מנהל הפרומפטים"""
         self.prompts = {}
         self._load_prompts()
-        
-    def _load_prompts(self):
-        """טעינת כל קבצי הפרומפטים"""
-        try:
-            # קריאת קובץ הפרומפטים הבסיסי
-            base_path = os.path.join(os.path.dirname(__file__), 'base_prompts.yaml')
-            with open(base_path, 'r', encoding='utf-8') as f:
-                self.prompts = yaml.safe_load(f)
-                
-            logfire.info('prompts_loaded', count=len(self.prompts))
-        except Exception as e:
-            logfire.error('prompt_loading_error', error=str(e))
-            raise RuntimeError(f"שגיאה בטעינת הפרומפטים: {e}")
-    
-    def get_base_prompt(self) -> str:
+        logging.info("prompts_loaded")
+
+    def _load_prompts(self) -> None:
+        """טעינת פרומפטים מקבצי YAML"""
+        prompts_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_files = [
+            f for f in os.listdir(prompts_dir)
+            if f.endswith('.yaml')
+        ]
+
+        for yaml_file in yaml_files:
+            with open(os.path.join(prompts_dir, yaml_file), 'r', encoding='utf-8') as f:
+                try:
+                    prompts = yaml.safe_load(f)
+                    if prompts and isinstance(prompts, dict):
+                        self.prompts.update(prompts)
+                except yaml.YAMLError as e:
+                    logging.error(f"שגיאה בטעינת קובץ {yaml_file}: {str(e)}")
+
+    def get_prompt(self, prompt_type: str, variables: Optional[Dict[str, Any]] = None) -> str:
         """
-        קבלת הפרומפט הבסיסי
+        קבלת פרומפט לפי סוג
         
+        Args:
+            prompt_type: סוג הפרומפט
+            variables: משתנים להחלפה בפרומפט
+            
         Returns:
-            הפרומפט הבסיסי
+            הפרומפט המבוקש
+            
+        Raises:
+            KeyError: אם הפרומפט לא נמצא
+            ValueError: אם יש שגיאה בהחלפת משתנים
         """
-        return self.prompts.get('base', {}).get('default', '')
-    
+        if prompt_type not in self.prompts:
+            raise KeyError(f"פרומפט מסוג {prompt_type} לא נמצא")
+
+        prompt = self.prompts[prompt_type]
+
+        if variables:
+            try:
+                prompt = prompt.format(**variables)
+            except KeyError as e:
+                raise KeyError(f"חסר משתנה {e} בפרומפט")
+            except Exception as e:
+                raise ValueError(f"שגיאה בהחלפת משתנים בפרומפט: {str(e)}")
+
+        return prompt.strip()
+
     def get_task_prompt(self, task_type: str) -> str:
         """
-        קבלת פרומפט ספציפי למשימה
+        קבלת פרומפט למשימה
         
         Args:
             task_type: סוג המשימה
             
         Returns:
-            הפרומפט המתאים למשימה
+            פרומפט למשימה
         """
-        return self.prompts.get('task_specific', {}).get(task_type, '')
-    
-    def get_error_message(self, error_type: str) -> str:
+        prompt_key = f"task_{task_type}"
+        return self.get_prompt(prompt_key)
+
+    def get_error_prompt(self, error_type: str) -> str:
         """
-        קבלת הודעת שגיאה
+        קבלת פרומפט לשגיאה
         
         Args:
             error_type: סוג השגיאה
             
         Returns:
-            הודעת השגיאה המתאימה
+            פרומפט לשגיאה
         """
-        return self.prompts.get('errors', {}).get(error_type, self.prompts.get('errors', {}).get('general', ''))
-    
-    def format_conversation_history(self, history: str, message: str) -> str:
+        prompt_key = f"error_{error_type}"
+        return self.get_prompt(prompt_key)
+
+    def get_base_prompt(self, prompt_type: str) -> str:
         """
-        פורמוט היסטוריית שיחה
+        קבלת פרומפט בסיסי
         
         Args:
-            history: היסטוריית השיחה
-            message: ההודעה הנוכחית
+            prompt_type: סוג הפרומפט
             
         Returns:
-            טקסט מפורמט
+            פרומפט בסיסי
         """
-        template = self.prompts.get('templates', {}).get('conversation_history', '')
-        return template.format(history=history, message=message)
-    
-    def format_context_info(self, context: str) -> str:
-        """
-        פורמוט מידע הקשר
-        
-        Args:
-            context: מידע ההקשר
-            
-        Returns:
-            טקסט מפורמט
-        """
-        template = self.prompts.get('templates', {}).get('context_info', '')
-        return template.format(context=context)
-    
-    def build_prompt(self, task_type: str, message: str, history: Optional[str] = None, context: Optional[str] = None) -> str:
-        """
-        בניית פרומפט מלא
-        
-        Args:
-            task_type: סוג המשימה
-            message: הודעת המשתמש
-            history: היסטוריית השיחה (אופציונלי)
-            context: מידע הקשר (אופציונלי)
-            
-        Returns:
-            הפרומפט המלא
-        """
-        # התחלה עם הפרומפט הבסיסי
-        prompt_parts = [self.get_base_prompt()]
-        
-        # הוספת פרומפט ספציפי למשימה אם קיים
-        task_prompt = self.get_task_prompt(task_type)
-        if task_prompt:
-            prompt_parts.append(task_prompt)
-        
-        # הוספת היסטוריית שיחה אם קיימת
-        if history:
-            prompt_parts.append(self.format_conversation_history(history, message))
-        else:
-            prompt_parts.append(f"הודעת המשתמש: {message}")
-        
-        # הוספת מידע הקשר אם קיים
-        if context:
-            prompt_parts.append(self.format_context_info(context))
-        
-        return "\n\n".join(prompt_parts)
+        prompt_key = f"base_{prompt_type}"
+        return self.get_prompt(prompt_key)
 
 # יצירת מופע גלובלי של מנהל הפרומפטים
 prompt_manager = PromptManager() 

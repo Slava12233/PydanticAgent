@@ -53,36 +53,98 @@ MARKETING_PROMPT = """
 אתה מבין את הקהל היעד ויודע איך לפנות אליו בצורה אפקטיבית.
 """
 
+# מיפוי סוגי פרומפטים לתבניות
+PROMPT_TEMPLATES = {
+    "system_introduction": BASE_BOT_PROMPT,
+    "user_greeting": """
+    שלום {user_name}! {time_of_day} טוב!
+    אני כאן כדי לעזור לך. במה אוכל לסייע?
+    """,
+    "help_message": """
+    אני יכול לעזור לך במגוון נושאים:
+    - ניהול מסמכים ומידע
+    - ניהול חנות מקוונת
+    - ניתוח נתונים ומכירות
+    - פתרון בעיות טכניות
+    - שיווק ופרסום
+    
+    פשוט שאל אותי כל שאלה ואשמח לעזור!
+    """,
+    "farewell": """
+    תודה על השיחה! אשמח לעזור שוב בפעם הבאה.
+    להתראות ויום טוב!
+    """
+}
+
+def get_base_prompt(prompt_type: str, variables: dict = None) -> str:
+    """
+    קבלת פרומפט בסיסי לפי סוג
+    
+    Args:
+        prompt_type: סוג הפרומפט
+        variables: משתנים להחלפה בפרומפט
+        
+    Returns:
+        הפרומפט המבוקש
+    """
+    if prompt_type not in PROMPT_TEMPLATES:
+        raise KeyError(f"פרומפט מסוג {prompt_type} לא נמצא")
+    
+    prompt = PROMPT_TEMPLATES[prompt_type]
+    
+    if variables:
+        try:
+            prompt = prompt.format(**variables)
+        except KeyError as e:
+            raise KeyError(f"חסר משתנה {e} בפרומפט")
+        except Exception as e:
+            raise ValueError(f"שגיאה בהחלפת משתנים בפרומפט: {str(e)}")
+    
+    return prompt.strip()
+
 def build_prompt(task_type: str, user_message: str, history_text: str = "") -> str:
     """
-    בניית פרומפט מותאם לסוג המשימה
+    בניית פרומפט מותאם למשימה
     
     Args:
         task_type: סוג המשימה
         user_message: הודעת המשתמש
-        history_text: טקסט היסטוריית השיחה (אופציונלי)
+        history_text: היסטוריית השיחה
         
     Returns:
-        פרומפט מותאם
+        פרומפט מותאם למשימה
     """
-    # בחירת הפרומפט הבסיסי לפי סוג המשימה
-    if task_type == "document_management":
-        base_prompt = BASE_BOT_PROMPT + "\n\n" + DOCUMENT_MANAGEMENT_PROMPT
-    elif task_type == "store_management":
-        base_prompt = BASE_BOT_PROMPT + "\n\n" + STORE_MANAGEMENT_PROMPT
-    elif task_type == "data_analysis":
-        base_prompt = BASE_BOT_PROMPT + "\n\n" + DATA_ANALYSIS_PROMPT
-    elif task_type == "error_handling":
-        base_prompt = BASE_BOT_PROMPT + "\n\n" + ERROR_HANDLING_PROMPT
+    # בחירת תבנית בסיסית לפי סוג המשימה
+    if task_type == "document":
+        base_prompt = DOCUMENT_MANAGEMENT_PROMPT
+    elif task_type == "store":
+        base_prompt = STORE_MANAGEMENT_PROMPT
+    elif task_type == "analysis":
+        base_prompt = DATA_ANALYSIS_PROMPT
+    elif task_type == "error":
+        base_prompt = ERROR_HANDLING_PROMPT
     elif task_type == "marketing":
-        base_prompt = BASE_BOT_PROMPT + "\n\n" + MARKETING_PROMPT
+        base_prompt = MARKETING_PROMPT
     else:
         base_prompt = BASE_BOT_PROMPT
     
     # הוספת היסטוריית השיחה אם קיימת
     if history_text:
-        prompt = f"{base_prompt}\n\nהיסטוריית השיחה:\n{history_text}\n\nהודעת המשתמש: {user_message}"
+        prompt = f"""
+        {base_prompt}
+        
+        היסטוריית השיחה:
+        {history_text}
+        
+        הודעת המשתמש:
+        {user_message}
+        """
     else:
-        prompt = f"{base_prompt}\n\nהודעת המשתמש: {user_message}"
+        prompt = f"""
+        {base_prompt}
+        
+        הודעת המשתמש:
+        {user_message}
+        """
     
-    return prompt 
+    return prompt.strip() 

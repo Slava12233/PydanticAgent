@@ -2,18 +2,16 @@
 שירות לניהול זיכרון שיחה מתקדם
 """
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
-import json
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+import numpy as np
 
-from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, text
 from openai import AsyncOpenAI
 
 from src.database.database import db
-from src.database.models import (
-    Message, Conversation, ConversationMemory,
-    MemoryType, MemoryPriority
-)
+from src.database.models import Memory
 
 logger = logging.getLogger(__name__)
 
@@ -23,85 +21,54 @@ class MemoryService:
     def __init__(self):
         """אתחול השירות"""
         self.openai_client = AsyncOpenAI()
-        
-        # הגדרות זיכרון
-        self.short_term_ttl = timedelta(hours=24)  # זמן חיים לזיכרון קצר טווח
-        self.relevance_decay = 0.1  # קצב דעיכת רלוונטיות ליום
-        self.memory_threshold = 0.3  # סף מינימלי לשמירת זיכרון
     
-    async def process_message(self, message: Message) -> None:
+    async def process_message(self, message: str, role: str = "user") -> None:
         """
-        עיבוד הודעה ויצירת זיכרונות
+        עיבוד הודעה ושמירתה בזיכרון
         
         Args:
-            message: הודעה לעיבוד
+            message: תוכן ההודעה
+            role: תפקיד השולח (user/assistant)
         """
         try:
-            # בדיקה אם ההודעה כבר עובדה
-            if message.is_memory_processed:
+            # בדיקה שההודעה לא ריקה
+            if not message.strip():
+                logger.warning("ניסיון לשמור הודעה ריקה")
                 return
             
-            # ניתוח ההודעה
-            analysis = await self._analyze_message(message.content)
+            # יצירת embedding להודעה
+            embedding = await self._get_embedding(message)
             
-            # יצירת זיכרונות לפי הניתוח
-            if analysis["importance"] >= self.memory_threshold:
-                memory_type = (
-                    MemoryType.LONG_TERM if analysis["importance"] > 0.7
-                    else MemoryType.SHORT_TERM
-                )
+            # יצירת רשומת זיכרון חדשה
+            memory = Memory(
+                content=message,
+                role=role,
+                embedding=embedding,
+                timestamp=datetime.now(timezone.utc)
+            )
+            
+            async with db.get_session() as session:
+                session.add(memory)
+                await session.commit()
                 
-                priority = (
-                    MemoryPriority.URGENT if analysis["importance"] > 0.9
-                    else MemoryPriority.HIGH if analysis["importance"] > 0.7
-                    else MemoryPriority.MEDIUM if analysis["importance"] > 0.4
-                    else MemoryPriority.LOW
-                )
-                
-                # יצירת זיכרון
-                memory = ConversationMemory(
-                    conversation_id=message.conversation_id,
-                    memory_type=memory_type,
-                    priority=priority,
-                    content=analysis["summary"],
-                    context=analysis["context"],
-                    source_message_ids=[message.id],
-                    metadata={
-                        "sentiment": analysis["sentiment"],
-                        "topics": analysis["topics"],
-                        "entities": analysis["entities"]
-                    }
-                )
-                
-                # שמירת הזיכרון
-                session = await db.get_session()
-                try:
-                    session.add(memory)
-                    message.is_memory_processed = True
-                    await session.commit()
-                finally:
-                    await session.close()
+            logger.info(f"Processed and saved message to memory: {message[:50]}...")
             
         except Exception as e:
             logger.error(f"שגיאה בעיבוד הודעה לזיכרון: {str(e)}")
     
     async def get_relevant_memories(
         self,
-        conversation_id: int,
         query: str,
         limit: int = 5,
-        memory_types: Optional[List[MemoryType]] = None,
-        min_relevance: float = 0.0
+        min_similarity: float = 0.3
     ) -> List[Dict[str, Any]]:
         """
         אחזור זיכרונות רלוונטיים לשאילתה
         
         Args:
-            conversation_id: מזהה השיחה
             query: שאילתת החיפוש
             limit: מספר תוצאות מקסימלי
-            memory_types: סוגי זיכרון לחיפוש
-            min_relevance: סף מינימלי לרלוונטיות
+            min_similarity: סף מינימלי לדמיון
             
         Returns:
             רשימת זיכרונות רלוונטיים
@@ -110,214 +77,63 @@ class MemoryService:
             # יצירת embedding לשאילתה
             query_embedding = await self._get_embedding(query)
             
-            # בניית שאילתת חיפוש
-            session = await db.get_session()
-            try:
-                sql = """
-                WITH similarity_results AS (
-                    SELECT 
-                        cm.*,
-                        1 - (cm.embedding <=> :query_embedding) as similarity
-                    FROM 
-                        conversation_memories cm
-                    WHERE 
-                        cm.conversation_id = :conversation_id
-                        AND cm.is_active = true
-                        AND cm.relevance_score >= :min_relevance
-                        {memory_type_filter}
-                    ORDER BY 
-                        cm.priority DESC,
-                        similarity DESC,
-                        cm.relevance_score DESC
-                    LIMIT :limit
-                )
-                SELECT 
-                    *,
-                    similarity * 100 as similarity_percentage
-                FROM 
-                    similarity_results
-                """
+            async with db.get_session() as session:
+                # שליפת כל הזיכרונות
+                stmt = select(Memory).order_by(Memory.timestamp.desc())
+                result = await session.execute(stmt)
+                memories = result.scalars().all()
                 
-                # הוספת פילטר לסוגי זיכרון
-                memory_type_filter = ""
-                if memory_types:
-                    memory_type_list = [mt.value for mt in memory_types]
-                    memory_type_filter = "AND cm.memory_type = ANY(:memory_types)"
-                
-                sql = sql.format(memory_type_filter=memory_type_filter)
-                
-                # ביצוע החיפוש
-                result = await session.execute(
-                    text(sql),
-                    {
-                        "conversation_id": conversation_id,
-                        "query_embedding": query_embedding,
-                        "min_relevance": min_relevance,
-                        "memory_types": memory_types if memory_types else None,
-                        "limit": limit
-                    }
-                )
-                
-                # עיבוד התוצאות
-                memories = []
-                for row in result:
-                    try:
-                        metadata = (
-                            row.metadata if isinstance(row.metadata, dict)
-                            else json.loads(row.metadata) if row.metadata
-                            else {}
-                        )
-                    except:
-                        metadata = {}
+                # חישוב דמיון וסינון תוצאות
+                results = []
+                for memory in memories:
+                    if memory.embedding is None:
+                        continue
                     
-                    memories.append({
-                        "id": row.id,
-                        "type": row.memory_type.value,
-                        "priority": row.priority.value,
-                        "content": row.content,
-                        "context": row.context,
-                        "similarity": row.similarity,
-                        "similarity_percentage": round(row.similarity_percentage, 2),
-                        "relevance_score": row.relevance_score,
-                        "created_at": row.created_at.isoformat(),
-                        "metadata": metadata
-                    })
+                    # חישוב דמיון קוסינוס
+                    similarity = self._cosine_similarity(query_embedding, memory.embedding)
+                    
+                    if similarity >= min_similarity:
+                        results.append({
+                            "id": memory.id,
+                            "content": memory.content,
+                            "role": memory.role,
+                            "timestamp": memory.timestamp.isoformat(),
+                            "similarity": float(similarity)
+                        })
                 
-                return memories
-                
-            finally:
-                await session.close()
+                # מיון לפי דמיון
+                results.sort(key=lambda x: x["similarity"], reverse=True)
+                return results[:limit]
                 
         except Exception as e:
             logger.error(f"שגיאה באחזור זיכרונות: {str(e)}")
             return []
     
-    async def update_memory_relevance(self) -> None:
-        """עדכון ציוני רלוונטיות לזיכרונות"""
-        try:
-            session = await db.get_session()
-            try:
-                # עדכון ציוני רלוונטיות
-                sql = """
-                UPDATE conversation_memories
-                SET relevance_score = GREATEST(
-                    0.0,
-                    relevance_score - :decay_rate * 
-                    EXTRACT(EPOCH FROM (NOW() - last_accessed)) / 86400.0
-                )
-                WHERE is_active = true
-                """
-                
-                await session.execute(
-                    text(sql),
-                    {"decay_rate": self.relevance_decay}
-                )
-                
-                # מחיקת זיכרונות קצרי טווח ישנים
-                sql = """
-                UPDATE conversation_memories
-                SET is_active = false
-                WHERE 
-                    memory_type = 'short_term'
-                    AND NOW() - created_at > :ttl
-                    AND is_active = true
-                """
-                
-                await session.execute(
-                    text(sql),
-                    {"ttl": self.short_term_ttl}
-                )
-                
-                await session.commit()
-                
-            finally:
-                await session.close()
-                
-        except Exception as e:
-            logger.error(f"שגיאה בעדכון רלוונטיות זיכרונות: {str(e)}")
-    
-    async def _analyze_message(self, content: str) -> Dict[str, Any]:
-        """
-        ניתוח תוכן ההודעה
-        
-        Args:
-            content: תוכן ההודעה
-            
-        Returns:
-            תוצאות הניתוח
-        """
-        try:
-            # שימוש ב-OpenAI לניתוח ההודעה
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """
-                        נתח את ההודעה וספק את המידע הבא:
-                        1. חשיבות (0-1)
-                        2. תקציר תמציתי
-                        3. הקשר
-                        4. רגש
-                        5. נושאים
-                        6. ישויות חשובות
-                        
-                        החזר את התוצאה כ-JSON.
-                        """
-                    },
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                ],
-                response_format={"type": "json_object"}
-            )
-            
-            # פענוח התשובה
-            analysis = json.loads(response.choices[0].message.content)
-            
-            return {
-                "importance": float(analysis.get("importance", 0.5)),
-                "summary": analysis.get("summary", ""),
-                "context": analysis.get("context", ""),
-                "sentiment": analysis.get("sentiment", "neutral"),
-                "topics": analysis.get("topics", []),
-                "entities": analysis.get("entities", [])
-            }
-            
-        except Exception as e:
-            logger.error(f"שגיאה בניתוח הודעה: {str(e)}")
-            return {
-                "importance": 0.0,
-                "summary": "",
-                "context": "",
-                "sentiment": "neutral",
-                "topics": [],
-                "entities": []
-            }
+    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+        """חישוב דמיון קוסינוס בין שני וקטורים"""
+        a = np.array(a)
+        b = np.array(b)
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
     
     async def _get_embedding(self, text: str) -> List[float]:
         """
-        קבלת וקטור embedding עבור טקסט
+        קבלת embedding עבור טקסט
         
         Args:
-            text: הטקסט לקבלת embedding
+            text: הטקסט לעיבוד
             
         Returns:
-            וקטור embedding
+            רשימת מספרים המייצגת את ה-embedding
         """
         try:
             response = await self.openai_client.embeddings.create(
                 model="text-embedding-3-small",
-                input=text,
-                encoding_format="float"
+                input=text
             )
-            
             return response.data[0].embedding
-            
         except Exception as e:
             logger.error(f"שגיאה בקבלת embedding: {str(e)}")
-            return [0.0] * 1536
+            return [0.0] * 1536  # ערך ברירת מחדל
 
 # יצירת מופע יחיד של השירות
 memory_service = MemoryService() 

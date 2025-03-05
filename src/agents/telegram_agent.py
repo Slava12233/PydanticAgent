@@ -1,5 +1,5 @@
 """
-סוכן טלגרם עם תמיכה בזיכרון ותקצירים
+סוכן טלגרם המטפל בהודעות ופקודות
 """
 
 import os
@@ -10,6 +10,11 @@ import logfire
 from typing import Optional, Dict, Any, AsyncGenerator, List
 import logging
 import json
+from openai import AsyncOpenAI
+from sqlalchemy import text
+from sqlalchemy.sql import select
+from telegram import Update
+from telegram.ext import ContextTypes
 
 # הוספת נתיב הפרויקט ל-Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -17,14 +22,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # ייבוא מודולים מקומיים
 from src.agents.core.model_manager import ModelManager
 from src.agents.core.task_identifier import identify_task, get_task_specific_prompt
-from src.agents.core.context_retriever import retrieve_context
+from src.tools.common_tools.context_manager import ConversationContext, understand_context
 from src.agents.models.responses import ChatResponse, TaskIdentification, AgentContext
-from src.tools.managers import ConversationContext
 from src.database.database import db
-from src.services.conversation_service import conversation_service
+from src.services.conversation_service import conversation_service, ConversationService
 from src.services.memory_service import memory_service
 from src.services.rag_service import rag_service
 from src.services.learning_service import learning_service
+from src.core.config import OPENAI_API_KEY
+from src.database.models import User, Message
 
 # הגדרת פרויקט logfire מראש
 if 'LOGFIRE_PROJECT' not in os.environ:
@@ -35,328 +41,282 @@ logfire.configure(token='G9hJ4gBw7tp2XPZ4chQ2HH433NW8S5zrMqDnxb038dQ7')
 logger = logging.getLogger(__name__)
 
 class TelegramAgent:
-    """מחלקה המרכזת את כל הלוגיקה של ה-Agent"""
-    
+    """סוכן טלגרם המטפל בהודעות ופקודות"""
+
     def __init__(self):
         """אתחול הסוכן"""
-        self.openai_client = AsyncOpenAI()
-        self.max_context_length = 4000  # אורך מקסימלי להקשר
-        
-        # אתחול מנהל המודל
         self.model_manager = ModelManager()
-        
-        # וידוא שמסד הנתונים מאותחל
-        if db.engine is None:
-            db.init_db()
-            
-        # יצירת מנהל הקשר
+        self.conversation_service = ConversationService()
         self.context_manager = ConversationContext()
-        
-        # הגדרות למידה
-        self.pattern_analysis_interval = 10  # מספר הודעות בין ניתוחי דפוסים
-        self.last_pattern_analysis = {}  # מעקב אחר ניתוח אחרון לכל משתמש
-        
-        logfire.info('telegram_agent_initialized')
-    
-    async def handle_message(self, user_id: int, message_text: str, conversation_id: Optional[int] = None) -> str:
-        """
-        טיפול בהודעה נכנסת
-        
-        Args:
-            user_id: מזהה המשתמש
-            message_text: תוכן ההודעה
-            conversation_id: מזהה השיחה (אופציונלי)
-            
-        Returns:
-            תשובת הסוכן
-        """
-        try:
-            # יצירת שיחה חדשה אם צריך
-            if not conversation_id:
-                conversation = await conversation_service.create_conversation(user_id)
-                conversation_id = conversation.id
-            
-            # שמירת הודעת המשתמש
-            await conversation_service.add_message(
-                conversation_id=conversation_id,
-                role="user",
-                content=message_text
-            )
-            
-            # בדיקה אם צריך לנתח דפוסים
-            await self._check_pattern_analysis(user_id)
-            
-            # קבלת הקשר רלוונטי
-            context = await conversation_service.get_conversation_context(
-                conversation_id=conversation_id,
-                query=message_text
-            )
-            
-            # חיפוש במסמכים רלוונטיים
-            relevant_docs = await rag_service.search_documents(
-                query=message_text,
-                limit=3,
-                min_similarity=0.3
-            )
-            
-            # בניית הקשר מלא לשאילתה
-            full_context = self._build_prompt_context(
-                message_text,
-                context,
-                relevant_docs
-            )
-            
-            # קבלת תשובה מ-GPT
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """
-                        אתה עוזר אישי מקצועי שמדבר עברית.
-                        השתמש בהקשר ובמידע שסופק כדי לתת תשובה מדויקת ומועילה.
-                        אם אין לך מספיק מידע, ציין זאת בבירור.
-                        """
-                    },
-                    {
-                        "role": "user",
-                        "content": full_context
-                    }
-                ]
-            )
-            
-            # קבלת התשובה המקורית
-            original_response = response.choices[0].message.content
-            
-            # התאמת התשובה לסגנון המשתמש
-            adapted_response = await learning_service.adapt_response_style(
-                user_id=user_id,
-                original_response=original_response
-            )
-            
-            # שמירת התשובה
-            await conversation_service.add_message(
-                conversation_id=conversation_id,
-                role="assistant",
-                content=adapted_response
-            )
-            
-            # עדכון משקלי זיכרונות
-            await learning_service.update_memory_weights(user_id)
-            
-            return adapted_response
-            
-        except Exception as e:
-            logger.error(f"שגיאה בטיפול בהודעה: {str(e)}")
-            return "מצטער, אירעה שגיאה בעיבוד הבקשה. אנא נסה שוב."
-    
-    async def _check_pattern_analysis(self, user_id: int) -> None:
-        """
-        בדיקה אם צריך לנתח דפוסי משתמש
-        
-        Args:
-            user_id: מזהה המשתמש
-        """
-        try:
-            # בדיקה מתי נערך הניתוח האחרון
-            last_analysis = self.last_pattern_analysis.get(user_id, 0)
-            messages_since_analysis = await self._count_messages_since(user_id, last_analysis)
-            
-            # ניתוח דפוסים אם עברו מספיק הודעות
-            if messages_since_analysis >= self.pattern_analysis_interval:
-                await learning_service.analyze_user_patterns(user_id)
-                self.last_pattern_analysis[user_id] = datetime.utcnow().timestamp()
-                
-        except Exception as e:
-            logger.error(f"שגיאה בבדיקת ניתוח דפוסים: {str(e)}")
-    
-    async def _count_messages_since(self, user_id: int, timestamp: float) -> int:
-        """
-        ספירת הודעות מאז נקודת זמן
-        
-        Args:
-            user_id: מזהה המשתמש
-            timestamp: חותמת זמן
-            
-        Returns:
-            מספר ההודעות
-        """
-        try:
-            session = await db.get_session()
-            try:
-                result = await session.execute(
-                    text("""
-                    SELECT COUNT(*)
-                    FROM messages m
-                    JOIN conversations c ON m.conversation_id = c.id
-                    WHERE 
-                        c.user_id = :user_id
-                        AND m.timestamp > to_timestamp(:ts)
-                    """),
-                    {
-                        "user_id": user_id,
-                        "ts": timestamp
-                    }
-                )
-                return result.scalar() or 0
-            finally:
-                await session.close()
-        except Exception as e:
-            logger.error(f"שגיאה בספירת הודעות: {str(e)}")
-            return 0
-    
-    def _build_prompt_context(
-        self,
-        query: str,
-        conversation_context: Dict[str, Any],
-        relevant_docs: List[Dict[str, Any]]
-    ) -> str:
-        """
-        בניית הקשר מלא לשאילתה
-        
-        Args:
-            query: השאילתה המקורית
-            conversation_context: הקשר השיחה
-            relevant_docs: מסמכים רלוונטיים
-            
-        Returns:
-            הקשר מלא כטקסט
-        """
-        context_parts = []
-        
-        # הוספת תקציר השיחה
-        if conversation_context.get("summary"):
-            context_parts.append(
-                "תקציר השיחה הנוכחית:\n" + conversation_context["summary"]
-            )
-        
-        # הוספת זיכרונות רלוונטיים
-        if conversation_context.get("relevant_memories"):
-            memories_text = "\n".join([
-                f"- {memory['content']} (רלוונטיות: {memory['similarity_percentage']}%)"
-                for memory in conversation_context["relevant_memories"]
-            ])
-            context_parts.append(
-                "זיכרונות רלוונטיים מהשיחה:\n" + memories_text
-            )
-        
-        # הוספת מסמכים רלוונטיים
-        if relevant_docs:
-            docs_text = "\n".join([
-                f"- {doc['content']} (מקור: {doc['source']})"
-                for doc in relevant_docs
-            ])
-            context_parts.append(
-                "מידע רלוונטי ממסמכים:\n" + docs_text
-            )
-        
-        # הוספת נושאים ותובנות
-        if conversation_context.get("context", {}).get("topics"):
-            context_parts.append(
-                "נושאי השיחה:\n" + 
-                "\n".join([f"- {topic}" for topic in conversation_context["context"]["topics"]])
-            )
-        
-        # הוספת השאילתה
-        context_parts.append("\nשאילתת המשתמש: " + query)
-        
-        # חיבור כל החלקים
-        full_context = "\n\n".join(context_parts)
-        
-        # קיצור אם צריך
-        if len(full_context) > self.max_context_length:
-            full_context = full_context[:self.max_context_length - 100] + "..."
-        
-        return full_context
+        logging.info("telegram_agent_initialized")
 
-    async def get_response(self, user_message: str, user_id: str, conversation_id: str) -> ChatResponse:
+    async def handle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
-        קבלת תשובה להודעת משתמש
+        טיפול בפקודות
         
         Args:
-            user_message: הודעת המשתמש
-            user_id: מזהה המשתמש
-            conversation_id: מזהה השיחה
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+        """
+        command = update.message.text.split()[0]
+        user = await self._get_or_create_user(update.message.from_user)
+        
+        if command == "/start":
+            await self._handle_start_command(update, context, user)
+        elif command == "/help":
+            await self._handle_help_command(update, context)
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="פקודה לא מוכרת. נסה /help לקבלת עזרה"
+            )
+
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        טיפול בהודעות רגילות
+        
+        Args:
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+        """
+        user = await self._get_or_create_user(update.message.from_user)
+        message_text = update.message.text
+        
+        # זיהוי סוג המשימה
+        task = await identify_task(message_text)
+        
+        # קבלת הקשר רלוונטי
+        conversation = await self.conversation_service.get_conversation_context(
+            user_id=user.id,
+            query=message_text
+        )
+        
+        # הבנת הקשר מההיסטוריה
+        context_data = understand_context(
+            message_text,
+            conversation.get("recent_messages", []),
+            self.context_manager
+        )
+        
+        # קבלת תשובה מהמודל
+        response = await self.model_manager.get_response(message_text, context_data)
+        
+        # שמירת ההודעה והתשובה
+        await self._save_message(user.id, message_text, "user")
+        await self._save_message(user.id, response, "assistant")
+        
+        # שליחת התשובה
+        await self.stream_response(update, context, response)
+
+    async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        טיפול בהודעות מדיה
+        
+        Args:
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+        """
+        user = await self._get_or_create_user(update.message.from_user)
+        
+        if update.message.photo:
+            file_id = update.message.photo[-1].file_id
+            caption = update.message.caption or ""
+            
+            # שמירת התמונה
+            photo_file = await context.bot.get_file(file_id)
+            await photo_file.download_to_drive(f"media/{file_id}.jpg")
+            
+            # טיפול בכיתוב
+            if caption:
+                await self.handle_message(update, context)
+            else:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="קיבלתי את התמונה. האם תרצה להוסיף תיאור?"
+                )
+
+    async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE, error: Exception) -> None:
+        """
+        טיפול בשגיאות
+        
+        Args:
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+            error: השגיאה שהתרחשה
+        """
+        logging.error(f"Error: {str(error)}")
+        
+        error_message = "מצטער, התרחשה שגיאה. אנא נסה שוב מאוחר יותר."
+        if update:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=error_message
+            )
+
+    async def handle_callback_query(self, callback_query: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        טיפול בכפתורים
+        
+        Args:
+            callback_query: שאילתת הכפתור
+            context: הקשר השיחה
+        """
+        query = callback_query.callback_query
+        user = await self._get_or_create_user(query.from_user)
+        
+        # טיפול בפעולת הכפתור
+        action = query.data
+        if action.startswith("confirm_"):
+            await self._handle_confirmation(query, context)
+        elif action.startswith("cancel_"):
+            await self._handle_cancellation(query, context)
+        
+        # עדכון הכפתור
+        await query.answer()
+
+    async def format_response(self, response: str) -> str:
+        """
+        פורמט תשובה לשליחה
+        
+        Args:
+            response: התשובה המקורית
             
         Returns:
-            תשובת הצ'אט
+            התשובה מפורמטת
         """
-        try:
-            # זיהוי סוג המשימה
-            task = await identify_task(user_message)
-            
-            # חיפוש הקשר רלוונטי
-            context = await retrieve_context(user_message)
-            
-            # בניית פרומפט מותאם
-            history = self.context_manager.get_conversation_history(conversation_id)
-            prompt = get_task_specific_prompt(task.task_type, user_message, history)
-            
-            # הוספת ההקשר לפרומפט אם נמצא
-            if context and context != "לא נמצא מידע רלוונטי במאגר הידע.":
-                prompt += f"\n\nמידע רלוונטי מהמאגר:\n{context}"
-            
-            # קבלת תשובה מהמודל
-            try:
-                response = await self.model_manager.agent.complete(prompt)
-                return ChatResponse(
-                    text=response,
-                    confidence=task.confidence_score,
-                    sources=[context] if context else None
-                )
-            except Exception as model_error:
-                # ניסיון להשתמש במודל גיבוי
-                await self.model_manager.initialize_fallback_agent()
-                response = await self.model_manager.fallback_agent.complete(prompt)
-                return ChatResponse(
-                    text=response,
-                    confidence=task.confidence_score,
-                    sources=[context] if context else None
-                )
-                
-        except Exception as e:
-            logfire.error('get_response_error', error=str(e))
-            error_response = self.model_manager.get_simple_response(user_message)
-            return ChatResponse(text=error_response, confidence=0.0)
-    
-    async def stream_response(self, user_message: str, user_id: str, conversation_id: str) -> AsyncGenerator[str, None]:
+        # הגבלת אורך ההודעה
+        if len(response) > 4096:
+            response = response[:4093] + "..."
+        
+        return response
+
+    async def stream_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, response: str) -> None:
         """
-        קבלת תשובה להודעת משתמש בזרימה
+        הזרמת תשובה למשתמש
         
         Args:
-            user_message: הודעת המשתמש
-            user_id: מזהה המשתמש
-            conversation_id: מזהה השיחה
-            
-        Yields:
-            חלקי התשובה בזרימה
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+            response: התשובה להזרמה
         """
-        try:
-            # זיהוי סוג המשימה
-            task = await identify_task(user_message)
+        formatted_response = await self.format_response(response)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=formatted_response
+        )
+
+    async def _get_or_create_user(self, telegram_user: Any) -> User:
+        """
+        קבלת או יצירת משתמש
+        
+        Args:
+            telegram_user: משתמש טלגרם
             
-            # חיפוש הקשר רלוונטי
-            context = await retrieve_context(user_message)
+        Returns:
+            אובייקט המשתמש
+        """
+        async with db.get_session() as session:
+            user = await session.execute(
+                text("SELECT * FROM users WHERE telegram_id = :telegram_id"),
+                {"telegram_id": telegram_user.id}
+            )
+            user = user.fetchone()
             
-            # בניית פרומפט מותאם
-            history = self.context_manager.get_conversation_history(conversation_id)
-            prompt = get_task_specific_prompt(task.task_type, user_message, history)
+            if not user:
+                new_user = User(
+                    telegram_id=telegram_user.id,
+                    username=telegram_user.username,
+                    first_name=telegram_user.first_name,
+                    last_name=telegram_user.last_name
+                )
+                session.add(new_user)
+                await session.commit()
+                return new_user
             
-            # הוספת ההקשר לפרומפט אם נמצא
-            if context and context != "לא נמצא מידע רלוונטי במאגר הידע.":
-                prompt += f"\n\nמידע רלוונטי מהמאגר:\n{context}"
-            
-            # קבלת תשובה מהמודל בזרימה
-            try:
-                async for token in self.model_manager.agent.stream_complete(prompt):
-                    yield token
-            except Exception as model_error:
-                # ניסיון להשתמש במודל גיבוי
-                await self.model_manager.initialize_fallback_agent()
-                async for token in self.model_manager.fallback_agent.stream_complete(prompt):
-                    yield token
-                    
-        except Exception as e:
-            logfire.error('stream_response_error', error=str(e))
-            error_response = self.model_manager.get_simple_response(user_message)
-            yield error_response
+            return User(**dict(user))
+
+    async def _save_message(self, user_id: int, content: str, role: str) -> None:
+        """
+        שמירת הודעה
+        
+        Args:
+            user_id: מזהה המשתמש
+            content: תוכן ההודעה
+            role: תפקיד השולח
+        """
+        async with db.get_session() as session:
+            message = Message(
+                user_id=user_id,
+                content=content,
+                role=role
+            )
+            session.add(message)
+            await session.commit()
+
+    async def _handle_start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user: User) -> None:
+        """
+        טיפול בפקודת start
+        
+        Args:
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+            user: המשתמש
+        """
+        welcome_message = f"שלום {user.first_name}! אני כאן כדי לעזור לך. במה אוכל לסייע?"
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=welcome_message
+        )
+
+    async def _handle_help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        טיפול בפקודת help
+        
+        Args:
+            update: עדכון מטלגרם
+            context: הקשר השיחה
+        """
+        help_message = """
+        אני יכול לעזור לך במגוון נושאים:
+        - ניהול מסמכים ומידע
+        - ניהול חנות מקוונת
+        - ניתוח נתונים ומכירות
+        - פתרון בעיות טכניות
+        - שיווק ופרסום
+        
+        פשוט שאל אותי כל שאלה ואשמח לעזור!
+        """
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=help_message
+        )
+
+    async def _handle_confirmation(self, query: Any, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        טיפול באישור פעולה
+        
+        Args:
+            query: שאילתת הכפתור
+            context: הקשר השיחה
+        """
+        action_id = query.data.split("_")[1]
+        await context.bot.edit_message_text(
+            chat_id=query.message.chat_id,
+            message_id=query.message.message_id,
+            text=f"הפעולה {action_id} אושרה ✅"
+        )
+
+    async def _handle_cancellation(self, query: Any, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        טיפול בביטול פעולה
+        
+        Args:
+            query: שאילתת הכפתור
+            context: הקשר השיחה
+        """
+        action_id = query.data.split("_")[1]
+        await context.bot.edit_message_text(
+            chat_id=query.message.chat_id,
+            message_id=query.message.message_id,
+            text=f"הפעולה {action_id} בוטלה ❌"
+        )

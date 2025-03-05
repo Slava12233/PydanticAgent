@@ -107,10 +107,14 @@ async def get_user_by_telegram_id(telegram_id: int, session: AsyncSession) -> Op
     """
     מחזיר משתמש לפי מזהה טלגרם
     """
-    result = await session.execute(
-        select(User).where(User.telegram_id == telegram_id)
-    )
-    return await result.scalar()
+    try:
+        result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"Error getting user by telegram_id {telegram_id}: {str(e)}")
+        return None
 
 # פונקציות לניהול חנויות ווקומרס
 
@@ -392,28 +396,35 @@ async def create_user(
 ) -> Optional[User]:
     """
     יצירת משתמש חדש
-    
-    Args:
-        session: סשן בסיס נתונים
-        telegram_id: מזהה טלגרם
-        username: שם משתמש (אופציונלי)
-        first_name: שם פרטי (אופציונלי)
-        last_name: שם משפחה (אופציונלי)
-        
-    Returns:
-        משתמש חדש אם נוצר בהצלחה, אחרת None
     """
     try:
-        user = User(
+        # בדיקה אם המשתמש כבר קיים
+        result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        existing_user = result.scalar_one_or_none()
+        
+        if existing_user:
+            logger.info(f"User with telegram_id {telegram_id} already exists")
+            return existing_user
+        
+        # יצירת משתמש חדש
+        new_user = User(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
+            role=UserRole.USER
         )
-        session.add(user)
+        
+        session.add(new_user)
         await session.commit()
-        return user
+        await session.refresh(new_user)
+        
+        logger.info(f"Created new user with telegram_id {telegram_id}")
+        return new_user
+        
     except Exception as e:
-        logger.error(f"Error creating user {telegram_id}: {e}")
+        logger.error(f"Error creating user: {str(e)}")
         await session.rollback()
         return None 

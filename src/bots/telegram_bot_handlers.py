@@ -3,6 +3,8 @@ from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from sqlalchemy import select
+from datetime import datetime
 
 from src.core.config import ALLOWED_COMMANDS
 from src.database import db
@@ -58,20 +60,44 @@ class TelegramBotHandlers:
                     )
                     return
                 
+                welcome_message = (
+                    f"👋 *ברוך הבא {user.first_name}!*\n\n"
+                    "אני בוט AI חכם שיכול לעזור לך בניהול חנות ה-WooCommerce שלך.\n\n"
+                    "🛍️ *מה אני יכול לעשות?*\n"
+                    "• ניהול מוצרים והזמנות\n"
+                    "• מעקב אחר מלאי ומכירות\n"
+                    "• ניתוח נתונים וסטטיסטיקות\n"
+                    "• שמירת מסמכים ומידע\n"
+                    "• מענה על שאלות בעברית\n\n"
+                    "🏪 *חיבור החנות:*\n"
+                    "כדי להתחיל, השתמש בפקודה /connect_store לחיבור חנות ה-WooCommerce שלך.\n\n"
+                    "📚 *מערכת המסמכים:*\n"
+                    "אני תומך במגוון סוגי קבצים כולל PDF, Word, Excel ועוד.\n"
+                    "השתמש בפקודה /add_document כדי להתחיל.\n\n"
+                    "הקלד /help לרשימת כל הפקודות הזמינות."
+                )
+                
                 await update.message.reply_text(
-                    format_success_message(
-                        "ברוך הבא! המשתמש נוצר בהצלחה.\n"
-                        "השתמש בפקודת /help כדי לראות את הפקודות הזמינות."
-                    ),
+                    format_success_message(welcome_message),
                     parse_mode=ParseMode.MARKDOWN
                 )
             else:
                 # משתמש קיים
+                welcome_back_message = (
+                    f"👋 *ברוך הבא בחזרה {user.first_name}!*\n\n"
+                    "מה תרצה לעשות היום?\n\n"
+                    "🏪 *ניהול החנות:*\n"
+                    "• /store_dashboard - לוח בקרה\n"
+                    "• /manage_products - ניהול מוצרים\n"
+                    "• /manage_orders - ניהול הזמנות\n\n"
+                    "📊 *סטטיסטיקות ומידע:*\n"
+                    "• /stats - נתוני החנות\n"
+                    "• /search - חיפוש במאגר הידע\n\n"
+                    "הקלד /help לרשימת כל הפקודות הזמינות."
+                )
+                
                 await update.message.reply_text(
-                    format_info_message(
-                        f"ברוך הבא בחזרה {user.first_name}!\n"
-                        "השתמש בפקודת /help כדי לראות את הפקודות הזמינות."
-                    ),
+                    format_info_message(welcome_back_message),
                     parse_mode=ParseMode.MARKDOWN
                 )
         return True
@@ -161,6 +187,9 @@ class TelegramBotHandlers:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """טיפול בהודעות טקסט רגילות"""
+        if not update.message or not update.message.text:
+            return
+
         user_id = update.effective_user.id
         message_text = update.message.text
         
@@ -168,20 +197,69 @@ class TelegramBotHandlers:
         
         # שמירת ההודעה במסד הנתונים
         async with db.get_session() as session:
-            user = await get_user_by_telegram_id(session, user_id)
-            if user:
-                message = Message(
-                    user_id=user.id,
-                    content=message_text,
-                    direction='incoming'
+            user = await get_user_by_telegram_id(user_id, session)
+            if not user:
+                logger.error(f"User {user_id} not found")
+                return
+
+            try:
+                # מציאת שיחה פעילה
+                conversation = await session.execute(
+                    select(Conversation)
+                    .where(Conversation.user_id == user.id)
+                    .where(Conversation.is_active == True)
+                    .order_by(Conversation.updated_at.desc())
                 )
-                session.add(message)
+                conversation = conversation.scalar_one_or_none()
+                
+                # אם אין שיחה פעילה, נבדוק אם יש שיחה לא פעילה מהיום
+                if not conversation:
+                    today = datetime.now().date()
+                    conversation = await session.execute(
+                        select(Conversation)
+                        .where(Conversation.user_id == user.id)
+                        .where(Conversation.created_at >= today)
+                        .order_by(Conversation.updated_at.desc())
+                    )
+                    conversation = conversation.scalar_one_or_none()
+                    
+                    # אם נמצאה שיחה מהיום, נפעיל אותה מחדש
+                    if conversation:
+                        conversation.is_active = True
+                        await session.commit()
+                        logger.info(f"Reactivated conversation {conversation.id} for user {user_id}")
+                    else:
+                        # אם אין שיחה מהיום, ניצור חדשה
+                        conversation = Conversation(
+                            user_id=user.id,
+                            title="שיחה חדשה",
+                            is_active=True
+                        )
+                        session.add(conversation)
+                        await session.commit()
+                        logger.info(f"Created new conversation with ID {conversation.id} for user {user_id}")
+
+                # עדכון זמן העדכון האחרון של השיחה
+                conversation.updated_at = datetime.now()
                 await session.commit()
-        
-        # העברת ההודעה לטיפול של ה-agent
-        response = await self.bot.conversations.process_message(update, context)
-        if response:
-            await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+
+                # העברת ההודעה לטיפול הסוכן עם מזהה השיחה
+                response_text = await self.bot.agent.handle_message(
+                    user_id=user_id,
+                    message_text=message_text,
+                    conversation_id=conversation.id
+                )
+                
+                # שליחת התשובה למשתמש
+                await update.message.reply_text(response_text)
+                
+            except Exception as e:
+                logger.error(f"Error processing message with agent: {str(e)}")
+                await update.message.reply_text(
+                    format_error_message("מצטער, אירעה שגיאה בעיבוד ההודעה. אנא נסה שוב.")
+                )
+            
+            await session.commit()  # שמירת כל השינויים
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """טיפול בקריאות callback"""

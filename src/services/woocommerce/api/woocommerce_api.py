@@ -10,26 +10,64 @@ import json
 import hmac
 import hashlib
 import base64
+import os
+from functools import lru_cache
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# קבועים
+DEFAULT_TIMEOUT = 30  # שניות
+DEFAULT_CACHE_TTL = 300  # 5 דקות בשניות
+
+@lru_cache(maxsize=1)
+def get_woocommerce_api() -> 'WooCommerceAPI':
+    """
+    מחזיר מופע של WooCommerceAPI.
+    משתמש ב-lru_cache כדי לשמור מופע יחיד.
+    
+    Returns:
+        WooCommerceAPI: מופע של WooCommerceAPI
+    """
+    # קריאת הגדרות מתוך משתני סביבה
+    wc_url = os.getenv('WOOCOMMERCE_URL', 'http://localhost/wordpress')
+    wc_consumer_key = os.getenv('WOOCOMMERCE_CONSUMER_KEY', '')
+    wc_consumer_secret = os.getenv('WOOCOMMERCE_CONSUMER_SECRET', '')
+    
+    return WooCommerceAPI(
+        url=wc_url,
+        consumer_key=wc_consumer_key,
+        consumer_secret=wc_consumer_secret
+    )
+
+@lru_cache(maxsize=1)
+def get_cached_woocommerce_api() -> 'CachedWooCommerceAPI':
+    """
+    מחזיר מופע של CachedWooCommerceAPI.
+    משתמש ב-lru_cache כדי לשמור מופע יחיד.
+    
+    Returns:
+        CachedWooCommerceAPI: מופע של CachedWooCommerceAPI
+    """
+    base_api = get_woocommerce_api()
+    return CachedWooCommerceAPI(base_api)
 
 class WooCommerceAPI:
     """
     מחלקה לתקשורת עם ה-API של ווקומרס
     """
     
-    def __init__(self, store_url: str, consumer_key: str, consumer_secret: str, version: str = "wc/v3"):
+    def __init__(self, url: str, consumer_key: str, consumer_secret: str, version: str = "wc/v3"):
         """
         אתחול המחלקה
         
         Args:
-            store_url: כתובת החנות
+            url: כתובת החנות
             consumer_key: מפתח צרכן
             consumer_secret: סוד צרכן
             version: גרסת ה-API
         """
-        self.store_url = store_url.rstrip('/')
+        self.store_url = url.rstrip('/')
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.api_url = f"{self.store_url}/wp-json/{version}"
@@ -39,7 +77,7 @@ class WooCommerceAPI:
         self.rate_limit = 10  # מספר בקשות מקסימלי בשנייה
         self.last_request_time = 0
         
-        logger.info(f"WooCommerce API initialized for store: {store_url}")
+        logger.info(f"WooCommerce API initialized for store: {url}")
     
     async def _make_request(self, method: str, endpoint: str, params: dict = None, data: dict = None) -> Tuple[int, dict]:
         """
@@ -513,20 +551,4 @@ class CachedWooCommerceAPI:
         # ניקוי המטמון בעת שינוי נתונים
         self._clear_cache()
         
-        return await self.api._make_request("DELETE", endpoint, params=params)
-
-def get_cached_woocommerce_api(store_url: str, consumer_key: str, consumer_secret: str, cache_ttl: int = 300) -> CachedWooCommerceAPI:
-    """
-    יצירת חיבור ל-API של WooCommerce עם מטמון
-    
-    Args:
-        store_url: כתובת החנות
-        consumer_key: מפתח צרכן
-        consumer_secret: סוד צרכן
-        cache_ttl: זמן תפוגה של המטמון בשניות (ברירת מחדל: 5 דקות)
-    
-    Returns:
-        אובייקט CachedWooCommerceAPI
-    """
-    api = WooCommerceAPI(store_url, consumer_key, consumer_secret)
-    return CachedWooCommerceAPI(api, cache_ttl) 
+        return await self.api._make_request("DELETE", endpoint, params=params) 

@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
+import asyncio
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -19,6 +20,7 @@ from telegram.constants import ParseMode
 # Import from our module structure
 from src.core.config import TELEGRAM_TOKEN, ALLOWED_COMMANDS, ADMIN_COMMANDS, ADMIN_USER_ID, LOGFIRE_API_KEY, LOGFIRE_PROJECT
 from src.utils.logger import setup_logger, log_exception, log_database_operation, log_telegram_message
+from src.agents.telegram_agent import TelegramAgent
 
 # Import handlers
 from .telegram_bot_handlers import TelegramBotHandlers
@@ -54,6 +56,7 @@ class TelegramBot:
         self.application = Application.builder().token(TELEGRAM_TOKEN).build()
         
         # אתחול המודולים
+        self.agent = TelegramAgent()  # הוספת ה-agent
         self.handlers = TelegramBotHandlers(self)
         self.conversations = TelegramBotConversations(self)
         self.documents = TelegramBotDocuments(self)
@@ -62,15 +65,15 @@ class TelegramBot:
         self.admin = TelegramBotAdmin(self)
         self.store = TelegramBotStore(self)
         
-        # הגדרת הפקודות
-        self._setup_commands()
-        
         # הגדרת ה-handlers
         self._setup_handlers()
         
+        # אתחול Event לשליטה בסגירת הבוט
+        self.stop_event = asyncio.Event()
+        
         logger.info("TelegramBot initialized successfully")
     
-    def _setup_commands(self):
+    async def _setup_commands(self):
         """הגדרת הפקודות הזמינות בבוט"""
         commands = [
             BotCommand("start", "התחל שיחה עם הבוט"),
@@ -85,7 +88,7 @@ class TelegramBot:
             BotCommand("store_dashboard", "לוח בקרה של החנות"),
         ]
         
-        self.application.bot.set_my_commands(commands)
+        await self.application.bot.set_my_commands(commands)
     
     def _setup_handlers(self):
         """הגדרת כל ה-handlers של הבוט"""
@@ -124,8 +127,36 @@ class TelegramBot:
     
     async def run(self):
         """הפעלת הבוט"""
-        logger.info("Starting the bot...")
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.run_polling()
-        logger.info("Bot stopped") 
+        try:
+            logger.info("Starting the bot...")
+            
+            # אתחול והפעלת הבוט
+            await self.application.initialize()
+            await self.application.start()
+            await self._setup_commands()
+            
+            # הפעלת polling
+            await self.application.updater.start_polling()
+            
+            logger.info("Bot is running...")
+            
+            # המתנה לסיגנל סגירה
+            await self.stop_event.wait()
+            
+        except Exception as e:
+            logger.error(f"Error running bot: {e}")
+            raise
+        finally:
+            logger.info("Bot stopped")
+            
+            # סגירת הבוט בצורה מסודרת
+            try:
+                await self.application.updater.stop()
+                await self.application.stop()
+                await self.application.shutdown()
+            except Exception as e:
+                logger.error(f"Error stopping bot: {e}")
+    
+    async def stop(self):
+        """סגירת הבוט"""
+        self.stop_event.set() 

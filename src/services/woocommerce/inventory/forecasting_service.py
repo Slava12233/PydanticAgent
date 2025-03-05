@@ -3,8 +3,8 @@
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-from ..base.base_service import BaseService, ServiceResponse
-from ..woocommerce import WooCommerceAPI
+from src.services.base.base_service import BaseService, ServiceResponse
+from ..api.woocommerce_api import WooCommerceAPI
 
 class ForecastingService(BaseService):
     """

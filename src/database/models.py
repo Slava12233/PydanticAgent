@@ -1,15 +1,16 @@
 """
 מודלים למסד הנתונים של המערכת
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, Boolean, ForeignKey, Float, JSON, ARRAY, Enum, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from pgvector.sqlalchemy import Vector
 import enum
+from sqlalchemy.orm import DeclarativeBase
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class UserRole(enum.Enum):
     """תפקידי משתמש במערכת"""
@@ -47,13 +48,13 @@ class User(Base):
     __tablename__ = 'users'
     
     id = Column(BigInteger, primary_key=True)
-    telegram_id = Column(BigInteger, unique=True)
-    username = Column(String, nullable=True)
-    first_name = Column(String, nullable=True)
-    last_name = Column(String, nullable=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=False)
+    username = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
     role = Column(Enum(UserRole), default=UserRole.USER)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    last_active = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # קשרים
     conversations = relationship("Conversation", back_populates="user")
@@ -76,8 +77,8 @@ class BotSettings(Base):
     notification_level = Column(String, default='all')  # רמת התראות (all, none, important, custom)
     api_keys = Column(JSON, default={})  # מפתחות API
     preferences = Column(JSON, default={})  # העדפות נוספות
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # קשרים
     user = relationship("User", back_populates="settings")
@@ -104,12 +105,12 @@ class ConversationMemory(Base):
     memory_type = Column(Enum(MemoryType), nullable=False)
     priority = Column(Enum(MemoryPriority), default=MemoryPriority.MEDIUM)
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(1536))  # וקטור למערכת RAG
+    embedding = Column(ARRAY(Float), nullable=True)  # וקטור למערכת RAG
     context = Column(Text, nullable=True)  # הקשר בו נוצר הזיכרון
     source_message_ids = Column(ARRAY(Integer))  # מזהי ההודעות שיצרו את הזיכרון
-    metadata = Column(JSON, default={})
-    created_at = Column(DateTime, default=datetime.utcnow)
-    last_accessed = Column(DateTime, default=datetime.utcnow)  # מעקב אחר שימוש בזיכרון
+    memory_metadata = Column(JSON, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_accessed = Column(DateTime(timezone=True), server_default=func.now())  # מעקב אחר שימוש בזיכרון
     access_count = Column(Integer, default=0)  # מונה שימושים
     relevance_score = Column(Float, default=1.0)  # ציון רלוונטיות (יורד עם הזמן)
     is_active = Column(Boolean, default=True)  # האם הזיכרון פעיל
@@ -119,8 +120,6 @@ class ConversationMemory(Base):
     
     # אינדקסים
     __table_args__ = (
-        Index('ix_memories_embedding_ivfflat', embedding, postgresql_using='ivfflat',
-              postgresql_with={'lists': 100}),
         Index('ix_memories_type_priority', memory_type, priority),
         Index('ix_memories_relevance', relevance_score.desc()),
     )
@@ -131,8 +130,8 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('users.id'), index=True)
     title = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     is_active = Column(Boolean, default=True)
     context = Column(JSON, default={})  # הקשר כללי של השיחה
     summary = Column(Text, nullable=True)  # תקציר השיחה המתעדכן
@@ -149,9 +148,9 @@ class Message(Base):
     conversation_id = Column(Integer, ForeignKey('conversations.id'), index=True)
     role = Column(String)  # 'user' או 'assistant'
     content = Column(Text)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    embedding = Column(Vector(1536))  # שדרוג ל-pgvector
-    metadata = Column(JSON, default={})  # מטא-דאטה נוסף (רגשות, כוונות, וכו')
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    embedding = Column(ARRAY(Float), nullable=True)  # וקטור למערכת RAG
+    message_metadata = Column(JSON, default={})  # מטא-דאטה נוסף (רגשות, כוונות, וכו')
     is_memory_processed = Column(Boolean, default=False)  # האם ההודעה עובדה לזיכרונות
     
     # קשרים
@@ -165,7 +164,7 @@ class Document(Base):
     source = Column(String)  # למשל: 'pdf', 'web', 'manual'
     content = Column(Text)
     doc_metadata = Column(JSON, default={})
-    upload_date = Column(DateTime, default=datetime.utcnow)
+    upload_date = Column(DateTime(timezone=True), server_default=func.now())
     
     # קשרים
     chunks = relationship("DocumentChunk", back_populates="document")
@@ -177,18 +176,14 @@ class DocumentChunk(Base):
     document_id = Column(Integer, ForeignKey('documents.id'), index=True)
     content = Column(Text)
     chunk_index = Column(Integer)  # סדר הקטע במסמך המקורי
-    embedding = Column(Vector(1536))  # שימוש ב-pgvector במקום ARRAY
-    metadata = Column(JSON, default={})
+    embedding = Column(ARRAY(Float), nullable=True)  # וקטור למערכת RAG
+    chunk_metadata = Column(JSON, default={})
     
     # קשרים
     document = relationship("Document", back_populates="chunks")
     
     # אינדקסים לביצועים
     __table_args__ = (
-        # אינדקס IVFFlat ל-pgvector - מהיר יותר לחיפוש בכמויות גדולות
-        Index('ix_document_chunks_embedding_ivfflat', embedding, postgresql_using='ivfflat',
-              postgresql_with={'lists': 100}),  # מספר הרשימות תלוי בכמות הנתונים
-        
         # אינדקס משולב לחיפוש לפי מסמך וסדר הקטעים
         Index('ix_document_chunks_doc_idx', document_id, chunk_index),
     )
@@ -206,8 +201,9 @@ class WooCommerceStore(Base):
     consumer_key = Column(String, nullable=False)
     consumer_secret = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    last_sync = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_sync = Column(DateTime(timezone=True), nullable=True)
     settings = Column(JSON, default={})
     
     # קשרים
@@ -235,7 +231,7 @@ class WooCommerceProduct(Base):
     stock_quantity = Column(Integer, nullable=True)
     stock_status = Column(String, nullable=True)  # 'instock', 'outofstock', 'onbackorder'
     product_data = Column(JSON, default={})  # נתונים נוספים על המוצר
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now())
     
     # קשרים
     store = relationship("WooCommerceStore", back_populates="products")
@@ -252,10 +248,10 @@ class WooCommerceOrder(Base):
     status = Column(String, nullable=False)  # 'pending', 'processing', 'completed', etc.
     total = Column(Float, nullable=False)
     currency = Column(String, nullable=True)
-    date_created = Column(DateTime, nullable=False)
-    date_modified = Column(DateTime, nullable=True)
+    date_created = Column(DateTime(timezone=True), nullable=False)
+    date_modified = Column(DateTime(timezone=True), nullable=True)
     order_data = Column(JSON, default={})  # נתונים נוספים על ההזמנה
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now())
     
     # קשרים
     store = relationship("WooCommerceStore", back_populates="orders")
@@ -293,7 +289,7 @@ class WooCommerceCustomer(Base):
     last_name = Column(String, nullable=True)
     username = Column(String, nullable=True)
     customer_data = Column(JSON, default={})  # נתונים נוספים על הלקוח
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now())
     
     # קשרים
     store = relationship("WooCommerceStore", back_populates="customers")
@@ -312,10 +308,10 @@ class WooCommercePayment(Base):
     method = Column(String, nullable=False)  # 'credit_card', 'bit', 'paypal', 'bank_transfer', 'cash'
     status = Column(String, nullable=False)  # 'pending', 'completed', 'failed', 'refunded'
     transaction_id = Column(String, nullable=True)
-    date_created = Column(DateTime, nullable=False)
-    date_modified = Column(DateTime, nullable=True)
+    date_created = Column(DateTime(timezone=True), nullable=False)
+    date_modified = Column(DateTime(timezone=True), nullable=True)
     payment_data = Column(JSON, default={})  # נתונים נוספים על התשלום
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now())
     
     # קשרים
     store = relationship("WooCommerceStore", back_populates="payments")
@@ -334,12 +330,12 @@ class WooCommerceShipping(Base):
     tracking_number = Column(String, nullable=True)
     shipping_address = Column(String, nullable=True)
     shipping_notes = Column(Text, nullable=True)
-    date_created = Column(DateTime, nullable=False)
-    date_modified = Column(DateTime, nullable=True)
-    estimated_delivery = Column(DateTime, nullable=True)
-    actual_delivery = Column(DateTime, nullable=True)
+    date_created = Column(DateTime(timezone=True), nullable=False)
+    date_modified = Column(DateTime(timezone=True), nullable=True)
+    estimated_delivery = Column(DateTime(timezone=True), nullable=True)
+    actual_delivery = Column(DateTime(timezone=True), nullable=True)
     shipping_data = Column(JSON, default={})  # נתונים נוספים על המשלוח
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now())
     
     # קשרים
     store = relationship("WooCommerceStore", back_populates="shipments")
@@ -356,12 +352,12 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
     is_sent = Column(Boolean, default=False)
-    send_time = Column(DateTime, nullable=False)
-    sent_time = Column(DateTime, nullable=True)
-    read_time = Column(DateTime, nullable=True)
+    send_time = Column(DateTime(timezone=True), nullable=False)
+    sent_time = Column(DateTime(timezone=True), nullable=True)
+    read_time = Column(DateTime(timezone=True), nullable=True)
     notification_data = Column(JSON, default={})  # נתונים נוספים על ההתראה
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # קשרים
     user = relationship("User", back_populates="notifications")
@@ -379,14 +375,29 @@ class ScheduledTask(Base):
     description = Column(Text, nullable=True)  # תיאור המשימה
     cron_expression = Column(String, nullable=True)  # ביטוי CRON לתזמון
     interval_seconds = Column(Integer, nullable=True)  # מרווח זמן בשניות
-    next_run = Column(DateTime, nullable=True)  # מועד הריצה הבא
-    last_run = Column(DateTime, nullable=True)  # מועד הריצה האחרון
+    next_run = Column(DateTime(timezone=True), nullable=True)  # מועד הריצה הבא
+    last_run = Column(DateTime(timezone=True), nullable=True)  # מועד הריצה האחרון
     status = Column(Enum(TaskStatus), default=TaskStatus.PENDING)  # סטטוס המשימה
     task_data = Column(JSON, default={})  # נתונים נוספים למשימה
     error_message = Column(Text, nullable=True)  # הודעת שגיאה אחרונה
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # קשרים
     user = relationship("User", back_populates="scheduled_tasks")
-    store = relationship("WooCommerceStore", back_populates="scheduled_tasks") 
+    store = relationship("WooCommerceStore", back_populates="scheduled_tasks")
+
+class Memory(Base):
+    """מודל לשמירת זיכרונות בסיסיים"""
+    __tablename__ = 'memories'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    content = Column(Text, nullable=False)
+    role = Column(String, nullable=False)  # 'user' או 'assistant'
+    embedding = Column(ARRAY(Float), nullable=True)  # וקטור למערכת RAG
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # אינדקסים
+    __table_args__ = (
+        Index('ix_memories_timestamp', timestamp.desc()),
+    ) 

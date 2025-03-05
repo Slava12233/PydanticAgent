@@ -1,11 +1,10 @@
 """
-כלים כלליים
+כלים משותפים
 """
 
-from .context_manager import ContextManager
-from .sales_analyzer import SalesAnalyzer
+from .context_manager import ConversationContext, understand_context
 
 __all__ = [
-    'ContextManager',
-    'SalesAnalyzer'
+    'ConversationContext',
+    'understand_context'
 ] 

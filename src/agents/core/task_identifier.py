@@ -5,7 +5,7 @@
 import logfire
 from typing import Tuple
 from src.agents.models.responses import TaskIdentification
-from src.agents.promts import identify_task_type
+from src.agents.prompts.task_prompts import identify_task_type
 from src.tools.intent import identify_specific_intent
 from src.agents.prompts.prompt_manager import prompt_manager
 

@@ -2,8 +2,8 @@
 מודול המכיל את השירות לניהול מלאי.
 """
 from typing import Dict, Any, List, Optional
-from ..base.base_service import BaseService, ServiceResponse
-from ..woocommerce import WooCommerceAPI
+from src.services.base.base_service import BaseService, ServiceResponse
+from ..api.woocommerce_api import WooCommerceAPI
 
 class InventoryService(BaseService):
     """

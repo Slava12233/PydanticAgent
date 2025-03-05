@@ -567,14 +567,13 @@ class Database:
             count = session.query(User.id).distinct().count()
             return count
             
-    async def close(self):
-        """סגירת החיבור למסד הנתונים"""
+    async def close_all_connections(self):
+        """סגירת כל החיבורים לדאטהבייס"""
+        if self.async_engine:
+            await self.async_engine.dispose()
         if self.engine:
-            logfire.info('database_connection_closing')
-            # סגירת מנועים
             self.engine.dispose()
-            if self.async_engine:
-                await self.async_engine.dispose()
+        logger.info("כל החיבורים לדאטהבייס נסגרו")
 
     @contextmanager
     def Session(self):
@@ -638,5 +637,5 @@ class Database:
             if close_session:
                 await session.close()
 
-# יצירת מופע גלובלי של Database
+# יצירת אובייקט מסד נתונים גלובלי
 db = Database() 
