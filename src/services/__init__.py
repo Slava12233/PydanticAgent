@@ -3,7 +3,7 @@
 """
 
 # ייבוא שירותי WooCommerce
-from src.services.woocommerce import (
+from src.services.store.woocommerce import (
     WooCommerceAPI, 
     CachedWooCommerceAPI, 
     get_cached_woocommerce_api,
@@ -11,9 +11,13 @@ from src.services.woocommerce import (
 )
 
 # ייבוא שירותי RAG
-from src.services.rag_service import (
-    RAGService,
-    rag_service,
+from src.services.ai import (
+    RAGCore,
+    RAGSearch,
+    RAGDocument,
+    rag_core,
+    rag_search,
+    rag_document,
     add_document_from_file,
     add_document_from_text,
     search_documents,
@@ -30,8 +34,12 @@ __all__ = [
     'get_woocommerce_api',
     
     # שירותי RAG
-    'RAGService',
-    'rag_service',
+    'RAGCore',
+    'RAGSearch',
+    'RAGDocument',
+    'rag_core',
+    'rag_search',
+    'rag_document',
     'add_document_from_file',
     'add_document_from_text',
     'search_documents',

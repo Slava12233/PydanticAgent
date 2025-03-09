@@ -41,7 +41,7 @@ except Exception as e:
     logger.warning(f"Logfire initialization failed: {e}. Continuing without Logfire.")
 
 # Import the TelegramBot class
-from src.bots.telegram_bot_core import TelegramBot
+from src.ui.telegram.core.telegram_bot_core import TelegramBot
 # Import the new database module
 from src.database.database import db
 
@@ -53,7 +53,7 @@ async def main_async():
     global bot
     try:
         # Initialize the database with table creation
-        db.init_db(recreate_tables=True)
+        await db.init_db(recreate_tables=True)
         logger.info("Database initialized successfully")
         
         # Initialize and run the Telegram bot

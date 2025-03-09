@@ -1,597 +1,62 @@
-# src/database/database.py
+"""
+Database module
+"""
 import os
-import asyncio
-from datetime import datetime
-import json
-from typing import List, Dict, Any, Optional, Tuple
-from sqlalchemy import create_engine, desc, asc, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.future import select
-import asyncpg
-import openai
-from pgvector.sqlalchemy import Vector
-from contextlib import contextmanager, asynccontextmanager
 import logging
-import traceback
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+import asyncio
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, DateTime, ForeignKey, Boolean, Float, JSON
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.pool import NullPool
+from contextlib import asynccontextmanager
 
-# יבוא הגדרות מקובץ config
-from src.core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT
+# Initialize logging
+logger = logging.getLogger(__name__)
 
-# הגדרת פרויקט logfire מראש
-if 'LOGFIRE_PROJECT' not in os.environ:
-    os.environ['LOGFIRE_PROJECT'] = LOGFIRE_PROJECT
+def get_config():
+    from src.core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT
+    return LOGFIRE_API_KEY, LOGFIRE_PROJECT
 
-import logfire
-# נסיון להגדיר את ה-PydanticPlugin אם הוא זמין
+# Initialize logfire
 try:
+    import logfire
+    LOGFIRE_API_KEY, LOGFIRE_PROJECT = get_config()
     logfire.configure(
         token=LOGFIRE_API_KEY,
         pydantic_plugin=logfire.PydanticPlugin(record='all')
     )
 except (AttributeError, ImportError):
-    # אם ה-PydanticPlugin לא זמין, נגדיר רק את הטוקן
-    logfire.configure(token=LOGFIRE_API_KEY)
+    logger.warning("Logfire not configured properly")
 
+# Create the database engine
 from src.core.config import DATABASE_URL
-from src.database.models import Base, User, Conversation, Message, Document, DocumentChunk
+engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
 
-# הגדרת לוגר
-logger = logging.getLogger(__name__)
+# Create a session factory
+async_session = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 class Database:
-    """מחלקה לניהול מסד הנתונים והאינטראקציות איתו"""
+    """Database class for managing database operations"""
     
-    def __init__(self, db_url=None):
-        """אתחול מסד הנתונים"""
-        if db_url is None:
-            # שימוש במשתני סביבה לחיבור למסד הנתונים
-            db_host = os.getenv("POSTGRES_HOST", "localhost")
-            db_port = os.getenv("POSTGRES_PORT", "5432")
-            db_name = os.getenv("POSTGRES_DB", "postgres")
-            db_user = os.getenv("POSTGRES_USER", "postgres")
-            db_password = os.getenv("POSTGRES_PASSWORD", "SSll456456!!")
-            
-            db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-            async_db_url = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        else:
-            async_db_url = db_url.replace('postgresql://', 'postgresql+asyncpg://')
-        
-        self.db_url = db_url
-        self.async_db_url = async_db_url
-        self.engine = None
-        self.async_engine = None
-        self.Session = None
-        self.AsyncSession = None
-    
-    def init_db(self, recreate_tables=False):
-        """אתחול מסד הנתונים - יצירת חיבור וטבלאות"""
-        with logfire.span('database_init'):
-            # יצירת מנוע SQLAlchemy סינכרוני
-            self.engine = create_engine(self.db_url)
-            
-            # יצירת מנוע SQLAlchemy אסינכרוני
-            self.async_engine = create_async_engine(self.async_db_url)
-            
-            # מחיקת טבלאות קיימות אם נדרש
-            if recreate_tables:
-                logfire.info('dropping_existing_tables')
-                Base.metadata.drop_all(self.engine)
-            
-            # יצירת הטבלאות אם הן לא קיימות
-            Base.metadata.create_all(self.engine)
-            
-            # יצירת session factory סינכרוני
-            self.Session = sessionmaker(bind=self.engine)
-            
-            # יצירת session factory אסינכרוני
-            self.AsyncSession = sessionmaker(
-                bind=self.async_engine,
-                class_=AsyncSession,
-                expire_on_commit=False
-            )
-            
-            logfire.info('database_connected', engine=str(self.engine.url).split('@')[0])
-    
-    #
-    # שיטות לניהול משתמשים
-    #
-    
-    def get_or_create_user(self, user_id: int, username: str = None, 
-                          first_name: str = None, last_name: str = None) -> User:
-        """קבלת משתמש קיים או יצירת חדש"""
-        with self.Session() as session:
-            user = session.query(User).filter(User.id == user_id).first()
-            
-            if not user:
-                user = User(
-                    id=user_id,
-                    username=username,
-                    first_name=first_name,
-                    last_name=last_name
-                )
-                session.add(user)
-                logfire.info("created_new_user", user_id=user_id)
-            else:
-                # עדכון זמן פעילות אחרון
-                user.last_active = datetime.utcnow()
-                
-            session.commit()
-            return user
-    
-    #
-    # שיטות לניהול שיחות
-    #
-    
-    def create_conversation(self, user_id: int, title: str = None) -> int:
-        """יצירת שיחה חדשה"""
-        with self.Session() as session:
-            # ודא שהמשתמש קיים
-            self.get_or_create_user(user_id)
-            
-            # סמן שיחות קודמות כלא פעילות
-            old_convs = session.query(Conversation)\
-                .filter(Conversation.user_id == user_id, Conversation.is_active == True)\
-                .all()
-                
-            for conv in old_convs:
-                conv.is_active = False
-            
-            # יצירת שיחה חדשה
-            new_conv = Conversation(
-                user_id=user_id,
-                title=title or f"שיחה מתאריך {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
-            )
-            session.add(new_conv)
-            session.commit()
-            
-            logfire.info("created_new_conversation", 
-                       user_id=user_id, conversation_id=new_conv.id)
-            return new_conv.id
-    
-    def get_active_conversation(self, user_id: int) -> Optional[int]:
-        """קבלת השיחה הפעילה של המשתמש"""
-        with self.Session() as session:
-            conv = session.query(Conversation)\
-                .filter(Conversation.user_id == user_id, Conversation.is_active == True)\
-                .first()
-            
-            if not conv:
-                # אם אין שיחה פעילה, יצירת שיחה חדשה
-                return self.create_conversation(user_id)
-            
-            return conv.id
-    
-    def get_all_user_conversations(self, user_id: int) -> List[Dict[str, Any]]:
-        """קבלת כל השיחות של המשתמש"""
-        with self.Session() as session:
-            convs = session.query(Conversation)\
-                .filter(Conversation.user_id == user_id)\
-                .order_by(desc(Conversation.updated_at))\
-                .all()
-            
-            return [
-                {
-                    "id": conv.id,
-                    "title": conv.title,
-                    "created_at": conv.created_at,
-                    "updated_at": conv.updated_at,
-                    "is_active": conv.is_active
-                }
-                for conv in convs
-            ]
-    
-    #
-    # שיטות לניהול הודעות
-    #
-    
-    def save_message(self, user_id: int, user_message: str, assistant_response: str) -> Tuple[int, int]:
-        """שמירת הודעת משתמש והתשובה מהסוכן"""
-        with self.Session() as session:
-            # קבלת שיחה פעילה
-            conv_id = self.get_active_conversation(user_id)
-            
-            # שמירת הודעת המשתמש
-            user_msg = Message(
-                conversation_id=conv_id,
-                role="user",
-                content=user_message
-            )
-            session.add(user_msg)
-            
-            # שמירת תשובת המערכת
-            assistant_msg = Message(
-                conversation_id=conv_id,
-                role="assistant",
-                content=assistant_response
-            )
-            session.add(assistant_msg)
-            
-            # עדכון זמן השיחה
-            conv = session.query(Conversation).get(conv_id)
-            conv.updated_at = datetime.utcnow()
-            
-            session.commit()
-            
-            # שמירת ה-ID לפני סגירת הסשן
-            user_msg_id = user_msg.id
-            assistant_msg_id = assistant_msg.id
-            
-            # החזרת מזהי ההודעות
-            return user_msg_id, assistant_msg_id
-    
-    def get_chat_history(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        קבלת היסטוריית השיחה הפעילה
-        
-        Args:
-            user_id: מזהה המשתמש בטלגרם
-            limit: מספר ההודעות המקסימלי לשליפה
-            
-        Returns:
-            רשימת הודעות בפורמט {message, response}
-        """
-        with self.Session() as session:
-            try:
-                # מציאת המשתמש לפי מזהה טלגרם
-                user = session.query(User).filter(User.id == user_id).first()
-                if not user:
-                    logger.warning(f"User {user_id} not found in database")
-                    return []
-                
-                # מציאת השיחה האחרונה של המשתמש
-                conv = session.query(Conversation)\
-                    .filter(Conversation.user_id == user.id)\
-                    .order_by(Conversation.updated_at.desc())\
-                    .first()
-                
-                if not conv:
-                    logger.warning(f"No active conversation found for user {user_id}")
-                    return []
-                
-                # שליפת הודעות מסודרות לפי זמן
-                messages = session.query(Message)\
-                    .filter(Message.conversation_id == conv.id)\
-                    .order_by(Message.timestamp.asc())\
-                    .all()
-                
-                # ארגון הודעות לפורמט המתאים לסוכן
-                history = []
-                i = 0
-                while i < len(messages) - 1:
-                    if messages[i].role == 'user' and i+1 < len(messages) and messages[i+1].role == 'assistant':
-                        history.append({
-                            'message': messages[i].content,
-                            'response': messages[i+1].content
-                        })
-                        i += 2
-                    else:
-                        # אם אין זוג מסודר, נוסיף רק את ההודעה הנוכחית
-                        history.append({
-                            'message': messages[i].content,
-                            'response': "" if i+1 >= len(messages) else messages[i+1].content
-                        })
-                        i += 1
-                
-                # החזרת ההיסטוריה המוגבלת
-                return history[-limit:] if len(history) > limit else history
-            except Exception as e:
-                logger.error(f"Error getting chat history: {e}")
-                return []
-    
-    def get_all_user_message_history(self, user_id: int) -> List[Dict[str, Any]]:
-        """קבלת כל היסטוריית ההודעות של המשתמש (משיחות קודמות)"""
-        with self.Session() as session:
-            # מציאת כל השיחות של המשתמש
-            convs = session.query(Conversation.id)\
-                .filter(Conversation.user_id == user_id)\
-                .order_by(desc(Conversation.updated_at))\
-                .all()
-            
-            conv_ids = [conv.id for conv in convs]
-            
-            if not conv_ids:
-                return []
-            
-            # שליפת הודעות מכל השיחות
-            all_messages = []
-            for conv_id in conv_ids:
-                messages = session.query(Message)\
-                    .filter(Message.conversation_id == conv_id)\
-                    .order_by(asc(Message.timestamp))\
-                    .all()
-                
-                i = 0
-                while i < len(messages) - 1:
-                    if messages[i].role == 'user' and messages[i+1].role == 'assistant':
-                        all_messages.append({
-                            'message': messages[i].content,
-                            'response': messages[i+1].content,
-                            'timestamp': messages[i].timestamp.isoformat(),
-                            'conversation_id': conv_id
-                        })
-                    i += 2
-            
-            return all_messages
-    
-    def clear_chat_history(self, user_id: int) -> int:
-        """מחיקת היסטוריית שיחה נוכחית על ידי יצירת שיחה חדשה"""
-        return self.create_conversation(user_id)
-    
-    #
-    # שיטות למערכת RAG
-    #
-    
-    async def create_embedding(self, text: str, model: str = "text-embedding-3-small") -> List[float]:
-        """יצירת embedding לטקסט באמצעות OpenAI API"""
-        with logfire.span("creating_embedding", text_length=len(text)):
-            max_retries = 5
-            retry_delay = 1.0  # שניה אחת בהתחלה
-            
-            for attempt in range(max_retries):
-                try:
-                    # שימוש בגרסה הסינכרונית של ה-API
-                    response = openai.embeddings.create(
-                        input=text,
-                        model=model
-                    )
-                    return response.data[0].embedding
-                except Exception as e:
-                    error_message = str(e).lower()
-                    
-                    # בדיקה אם זו שגיאת rate limit
-                    if "rate limit" in error_message or "429" in error_message:
-                        if attempt < max_retries - 1:  # אם זה לא הניסיון האחרון
-                            # לוג על הניסיון החוזר
-                            logfire.warning(
-                                "embedding_rate_limit", 
-                                attempt=attempt + 1, 
-                                max_retries=max_retries,
-                                retry_delay=retry_delay
-                            )
-                            
-                            # המתנה לפני הניסיון הבא עם הכפלת זמן ההמתנה בכל פעם (exponential backoff)
-                            await asyncio.sleep(retry_delay)
-                            retry_delay *= 2  # הכפלת זמן ההמתנה לניסיון הבא
-                            continue
-                    
-                    # אם הגענו לכאן, זו שגיאה אחרת או שנגמרו הניסיונות
-                    logfire.error("embedding_creation_error", error=str(e), attempt=attempt + 1)
-                    
-                    # החזרת וקטור אפס במקרה של שגיאה
-                    return [0.0] * 1536
-    
-    async def add_document(self, title: str, content: str, source: str, metadata: dict = None) -> int:
-        """הוספת מסמך למסד הנתונים"""
-        try:
-            # יצירת מסמך חדש
-            document = Document(
-                title=title,
-                source=source,
-                content=content,
-                doc_metadata=metadata or {}  # שינוי שם מ-metadata ל-doc_metadata
-            )
-            with self.Session() as session:
-                session.add(document)
-                session.commit()
-                doc_id = document.id
-            
-            # חלוקה לקטעים (chunks)
-            chunks = self._split_text_to_chunks(content, 1000)
-            
-            # יצירת embeddings לכל קטע ושמירתם
-            for i, chunk_text in enumerate(chunks):
-                embedding = await self.create_embedding(chunk_text)
-                
-                with self.Session() as session:
-                    chunk = DocumentChunk(
-                        document_id=doc_id,
-                        content=chunk_text,
-                        chunk_index=i,
-                        embedding=embedding
-                    )
-                    session.add(chunk)
-                    session.commit()
-            
-            logfire.info("added_document_to_rag", 
-                        doc_id=doc_id, 
-                        title=title, 
-                        chunks_count=len(chunks))
-            return doc_id
-        except Exception as e:
-            logfire.error("error_adding_document", error=str(e))
-            return -1
-    
-    def _split_text_to_chunks(self, text: str, chunk_size: int) -> List[str]:
-        """חלוקת טקסט לקטעים באורך דומה"""
-        # פיצול פשוט לפי אורך. ניתן לשפר זאת בעתיד לפיצול חכם יותר
-        chunks = []
-        for i in range(0, len(text), chunk_size):
-            chunk = text[i:i+chunk_size]
-            if chunk.strip():  # הוסף רק קטעים עם תוכן
-                chunks.append(chunk)
-        return chunks
-    
-    async def search_relevant_chunks(self, query: str, limit: int = 5, min_similarity: float = 0.0) -> List[Dict[str, Any]]:
-        """חיפוש קטעים רלוונטיים במערכת RAG לפי שאילתה"""
-        with logfire.span("rag_search", query=query):
-            try:
-                print(f"חיפוש קטעים רלוונטיים עבור: '{query}'")
-                
-                # יצירת embedding לשאילתה
-                query_embedding = await self.create_embedding(query)
-                print(f"נוצר embedding לשאילתה באורך: {len(query_embedding)}")
-                
-                async with self.AsyncSession() as session:
-                    # בדיקה אם הטבלה document_chunks קיימת
-                    try:
-                        # שאילתה פשוטה שמחזירה את כל הקטעים
-                        query_sql = text("""
-                        SELECT 
-                            dc.id, 
-                            dc.content, 
-                            d.title, 
-                            d.source,
-                            dc.embedding
-                        FROM document_chunks dc
-                        JOIN documents d ON dc.document_id = d.id
-                        """)
-                        
-                        result = await session.execute(query_sql)
-                        rows = result.fetchall()
-                        print(f"נמצאו {len(rows)} קטעים במסד הנתונים")
-                    except Exception as e:
-                        print(f"שגיאה בשאילתת SQL: {str(e)}")
-                        # אם יש שגיאה, ננסה לבדוק אם הטבלאות קיימות
-                        check_tables_sql = text("""
-                        SELECT table_name 
-                        FROM information_schema.tables 
-                        WHERE table_schema = 'public'
-                        """)
-                        tables_result = await session.execute(check_tables_sql)
-                        tables = [row[0] for row in tables_result.fetchall()]
-                        print(f"טבלאות קיימות: {tables}")
-                        
-                        if 'documents' not in tables or 'document_chunks' not in tables:
-                            print("הטבלאות document_chunks או documents לא קיימות")
-                            return []
-                        
-                        # בדיקת מבנה הטבלה
-                        check_columns_sql = text("""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'document_chunks'
-                        """)
-                        columns_result = await session.execute(check_columns_sql)
-                        columns = [row[0] for row in columns_result.fetchall()]
-                        print(f"עמודות בטבלת document_chunks: {columns}")
-                        
-                        # אם אין עמודת embedding, נחזיר רשימה ריקה
-                        if 'embedding' not in columns:
-                            print("עמודת embedding לא קיימת בטבלת document_chunks")
-                            return []
-                        
-                        # ננסה שאילתה אחרת שלא משתמשת בעמודות שאולי לא קיימות
-                        query_sql = text("""
-                        SELECT 
-                            dc.id, 
-                            dc.content, 
-                            d.title, 
-                            d.source
-                        FROM document_chunks dc
-                        JOIN documents d ON dc.document_id = d.id
-                        LIMIT :limit
-                        """)
-                        
-                        result = await session.execute(query_sql, {"limit": limit})
-                        rows = result.fetchall()
-                        print(f"נמצאו {len(rows)} קטעים במסד הנתונים (ללא embedding)")
-                        
-                        # נחזיר את התוצאות ללא חישוב דמיון
-                        return [
-                            {
-                                "id": row.id,
-                                "content": row.content,
-                                "title": row.title,
-                                "source": row.source,
-                                "similarity": 0,
-                                "similarity_percentage": 0
-                            }
-                            for row in rows
-                        ]
-                    
-                    # חישוב דמיון קוסינוס בקוד Python
-                    chunks_with_similarity = []
-                    for row in rows:
-                        # חישוב דמיון קוסינוס בין וקטורים
-                        similarity = self._cosine_similarity(query_embedding, row.embedding) if row.embedding else 0
-                        print(f"קטע {row.id}, כותרת: {row.title}, דמיון: {similarity:.4f}")
-                        
-                        # הוספת הקטע לרשימת התוצאות אם הדמיון מעל הסף המינימלי
-                        # אם הסף הוא 0, נוסיף את כל הקטעים
-                        if similarity >= min_similarity:
-                            chunks_with_similarity.append({
-                                "id": row.id,
-                                "content": row.content,
-                                "title": row.title,
-                                "source": row.source,
-                                "similarity": similarity,
-                                "similarity_percentage": similarity * 100  # המרה לאחוזים
-                            })
-                    
-                    # מיון התוצאות לפי דמיון (מהגבוה לנמוך)
-                    sorted_chunks = sorted(chunks_with_similarity, key=lambda x: x["similarity"], reverse=True)
-                    
-                    # החזרת מספר התוצאות המבוקש
-                    return sorted_chunks[:limit]
-            except Exception as e:
-                print(f"שגיאה כללית בחיפוש קטעים: {str(e)}")
-                logfire.error('search_relevant_chunks_error', error=str(e))
-                return []
-    
-    def _cosine_similarity(self, vec1, vec2):
-        """חישוב דמיון קוסינוס בין שני וקטורים"""
-        if not vec1 or not vec2:
-            return 0
-        
-        try:
-            import numpy as np
-            
-            # המרה למערכי numpy
-            vec1_np = np.array(vec1)
-            vec2_np = np.array(vec2)
-            
-            # חישוב דמיון קוסינוס
-            dot_product = np.dot(vec1_np, vec2_np)
-            norm_vec1 = np.linalg.norm(vec1_np)
-            norm_vec2 = np.linalg.norm(vec2_np)
-            
-            if norm_vec1 == 0 or norm_vec2 == 0:
-                return 0
-                
-            return dot_product / (norm_vec1 * norm_vec2)
-        except Exception as e:
-            logfire.error("cosine_similarity_error", error=str(e))
-            return 0
-    
-    def get_message_count(self) -> int:
-        """קבלת מספר ההודעות הכולל במערכת - שימושי לסטטיסטיקות"""
-        with self.Session() as session:
-            count = session.query(Message).count()
-            return count
-    
-    def get_user_count(self) -> int:
-        """קבלת מספר המשתמשים הייחודיים - שימושי לסטטיסטיקות"""
-        with self.Session() as session:
-            # COUNT DISTINCT user_id
-            count = session.query(User.id).distinct().count()
-            return count
-            
-    async def close_all_connections(self):
-        """סגירת כל החיבורים לדאטהבייס"""
-        if self.async_engine:
-            await self.async_engine.dispose()
-        if self.engine:
-            self.engine.dispose()
-        logger.info("כל החיבורים לדאטהבייס נסגרו")
-
-    @contextmanager
-    def Session(self):
-        """מנהל הקשר לסשן סינכרוני"""
-        session = self.Session()
-        try:
-            yield session
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            raise e
-        finally:
-            session.close()
+    def __init__(self):
+        """Initialize the database"""
+        self.engine = engine
+        self.async_session = async_session
     
     @asynccontextmanager
     async def get_session(self):
-        """מנהל הקשר לסשן אסינכרוני"""
-        session = self.AsyncSession()
+        """
+        Get a database session as an async context manager
+        
+        Yields:
+            AsyncSession: Database session
+        """
+        session = self.async_session()
         try:
             yield session
             await session.commit()
@@ -600,42 +65,413 @@ class Database:
             raise e
         finally:
             await session.close()
-
-    async def get_conversation_messages(self, conversation_id: int, limit: int = 10, session = None) -> List[Message]:
+    
+    @property
+    def session(self):
         """
-        שליפת הודעות משיחה לפי מזהה השיחה
+        Get a database session as a context manager
+        
+        Returns:
+            AsyncSession: Database session context manager
+        """
+        return self.async_session
+    
+    async def create_all(self):
+        """Create all database tables"""
+        from src.models.database import Base
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    
+    async def drop_all(self):
+        """Drop all database tables"""
+        from src.models.database import Base
+        from sqlalchemy import text
+        
+        # שימוש ב-CASCADE כדי למחוק את כל הטבלאות עם התלויות שלהן
+        async with self.engine.begin() as conn:
+            # קבלת רשימת כל הטבלאות במסד הנתונים
+            result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
+            tables = result.scalars().all()
+            
+            if tables:
+                # מחיקת כל הטבלאות עם CASCADE
+                await conn.execute(text(f"DROP TABLE IF EXISTS {', '.join(tables)} CASCADE"))
+                logger.info(f"Dropped all tables with CASCADE: {', '.join(tables)}")
+            else:
+                logger.info("No tables to drop")
+    
+    async def init_db(self, recreate_tables=False):
+        """
+        Initialize the database
         
         Args:
-            conversation_id: מזהה השיחה
-            limit: מספר ההודעות המקסימלי לשליפה
-            session: סשן מסד נתונים (אופציונלי)
+            recreate_tables: If True, drop and recreate all tables
+        """
+        try:
+            if recreate_tables:
+                await self.drop_all()
+            await self.create_all()
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing database: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+    
+    def select(self, *args, **kwargs):
+        """Wrapper for sqlalchemy select"""
+        from sqlalchemy import select
+        return select(*args, **kwargs)
+    
+    @property
+    def func(self):
+        """Wrapper for sqlalchemy func"""
+        from sqlalchemy import func
+        return func
+    
+    @property
+    def and_(self):
+        """Wrapper for sqlalchemy and_"""
+        from sqlalchemy import and_
+        return and_
+    
+    @property
+    def or_(self):
+        """Wrapper for sqlalchemy or_"""
+        from sqlalchemy import or_
+        return or_
+    
+    @property
+    def desc(self):
+        """Wrapper for sqlalchemy desc"""
+        from sqlalchemy import desc
+        return desc
+    
+    @property
+    def asc(self):
+        """Wrapper for sqlalchemy asc"""
+        from sqlalchemy import asc
+        return asc
+    
+    async def execute(self, query, params=None):
+        """
+        Execute a raw SQL query
+        
+        Args:
+            query: SQL query to execute
+            params: Query parameters (optional)
             
         Returns:
-            רשימת הודעות
+            Query result
         """
-        if session is None:
-            session = await self.get_session()
-            close_session = True
-        else:
-            close_session = False
+        async with self.get_session() as session:
+            result = await session.execute(query, params)
+            return result
+    
+    async def scalar(self, query, params=None):
+        """
+        Execute a query and return a scalar result
         
+        Args:
+            query: SQL query to execute
+            params: Query parameters (optional)
+            
+        Returns:
+            Scalar result
+        """
+        async with self.get_session() as session:
+            result = await session.scalar(query, params)
+            return result
+    
+    async def scalars(self, query, params=None):
+        """
+        Execute a query and return multiple scalar results
+        
+        Args:
+            query: SQL query to execute
+            params: Query parameters (optional)
+            
+        Returns:
+            List of scalar results
+        """
+        async with self.get_session() as session:
+            result = await session.scalars(query, params)
+            return result
+    
+    async def add(self, obj):
+        """
+        Add an object to the session
+        
+        Args:
+            obj: Object to add
+        """
+        async with self.get_session() as session:
+            session.add(obj)
+            await session.commit()
+    
+    async def delete(self, obj):
+        """
+        Delete an object from the session
+        
+        Args:
+            obj: Object to delete
+        """
+        async with self.get_session() as session:
+            await session.delete(obj)
+            await session.commit()
+    
+    async def flush(self):
+        """Flush the session"""
+        async with self.get_session() as session:
+            await session.flush()
+    
+    async def commit(self):
+        """Commit the session"""
+        async with self.get_session() as session:
+            await session.commit()
+    
+    async def rollback(self):
+        """Rollback the session"""
+        async with self.get_session() as session:
+            await session.rollback()
+    
+    async def close(self):
+        """Close the session"""
         try:
-            # שליפת ההודעות האחרונות מהשיחה בסדר כרונולוגי
-            query = select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at.asc())
-            
-            if limit:
-                query = query.limit(limit)
-            
-            result = await session.execute(query)
-            messages = result.scalars().all()
-            
-            return messages
+            # אין צורך לסגור את ה-sessionmaker עצמו
+            # רק לרשום הודעת לוג שהחיבור נסגר
+            logger.info("Database connection closed successfully")
         except Exception as e:
-            logger.error(f"Error getting conversation messages: {e}")
-            return []
-        finally:
-            if close_session:
-                await session.close()
+            logger.error(f"Error closing database connection: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+    
+    async def refresh(self, obj):
+        """
+        Refresh an object from the database
+        
+        Args:
+            obj: Object to refresh
+        """
+        async with self.get_session() as session:
+            await session.refresh(obj)
+    
+    async def merge(self, obj):
+        """
+        Merge an object with the session
+        
+        Args:
+            obj: Object to merge
+            
+        Returns:
+            Merged object
+        """
+        async with self.get_session() as session:
+            result = await session.merge(obj)
+            await session.commit()
+            return result
+    
+    async def bulk_save_objects(self, objects):
+        """
+        Save multiple objects in bulk
+        
+        Args:
+            objects: List of objects to save
+        """
+        async with self.get_session() as session:
+            session.bulk_save_objects(objects)
+            await session.commit()
+    
+    async def bulk_insert_mappings(self, mapper, mappings):
+        """
+        Insert multiple mappings in bulk
+        
+        Args:
+            mapper: SQLAlchemy mapper
+            mappings: List of mappings to insert
+        """
+        async with self.get_session() as session:
+            session.bulk_insert_mappings(mapper, mappings)
+            await session.commit()
+    
+    async def bulk_update_mappings(self, mapper, mappings):
+        """
+        Update multiple mappings in bulk
+        
+        Args:
+            mapper: SQLAlchemy mapper
+            mappings: List of mappings to update
+        """
+        async with self.get_session() as session:
+            session.bulk_update_mappings(mapper, mappings)
+            await session.commit()
+    
+    async def execute_many(self, statement, params_seq):
+        """
+        Execute multiple statements with different parameters
+        
+        Args:
+            statement: SQL statement to execute
+            params_seq: Sequence of parameters
+        """
+        async with self.get_session() as session:
+            await session.execute(statement, params_seq)
+            await session.commit()
+    
+    async def get_or_create(self, model, defaults=None, **kwargs):
+        """
+        Get an object or create it if it doesn't exist
+        
+        Args:
+            model: SQLAlchemy model
+            defaults: Default values for creation
+            **kwargs: Lookup parameters
+            
+        Returns:
+            Tuple of (object, created)
+        """
+        async with self.get_session() as session:
+            instance = await session.scalar(
+                self.select(model).filter_by(**kwargs)
+            )
+            if instance:
+                return instance, False
+            
+            params = dict(kwargs)
+            if defaults:
+                params.update(defaults)
+            instance = model(**params)
+            session.add(instance)
+            await session.commit()
+            return instance, True
+    
+    async def update_or_create(self, model, defaults=None, **kwargs):
+        """
+        Update an object or create it if it doesn't exist
+        
+        Args:
+            model: SQLAlchemy model
+            defaults: Default values for creation/update
+            **kwargs: Lookup parameters
+            
+        Returns:
+            Tuple of (object, created)
+        """
+        async with self.get_session() as session:
+            instance = await session.scalar(
+                self.select(model).filter_by(**kwargs)
+            )
+            if instance:
+                if defaults:
+                    for key, value in defaults.items():
+                        setattr(instance, key, value)
+                await session.commit()
+                return instance, False
+            
+            params = dict(kwargs)
+            if defaults:
+                params.update(defaults)
+            instance = model(**params)
+            session.add(instance)
+            await session.commit()
+            return instance, True
+    
+    async def count(self, query):
+        """
+        Count the number of results for a query
+        
+        Args:
+            query: Query to count
+            
+        Returns:
+            Number of results
+        """
+        async with self.get_session() as session:
+            count_query = query.with_only_columns([self.func.count()]).order_by(None)
+            result = await session.scalar(count_query)
+            return result
+    
+    async def exists(self, query):
+        """
+        Check if any result exists for a query
+        
+        Args:
+            query: Query to check
+            
+        Returns:
+            True if results exist, False otherwise
+        """
+        async with self.get_session() as session:
+            exists_query = query.exists()
+            result = await session.scalar(exists_query)
+            return result
+    
+    async def get_or_404(self, model, id):
+        """
+        Get an object by ID or raise 404
+        
+        Args:
+            model: SQLAlchemy model
+            id: Object ID
+            
+        Returns:
+            Object if found
+            
+        Raises:
+            404 error if not found
+        """
+        async with self.get_session() as session:
+            instance = await session.get(model, id)
+            if not instance:
+                raise Exception(f"{model.__name__} with id {id} not found")
+            return instance
+    
+    async def first_or_404(self, query):
+        """
+        Get first result or raise 404
+        
+        Args:
+            query: Query to execute
+            
+        Returns:
+            First result if found
+            
+        Raises:
+            404 error if not found
+        """
+        async with self.get_session() as session:
+            instance = await session.scalar(query)
+            if not instance:
+                raise Exception("No results found")
+            return instance
+    
+    async def paginate(self, query, page=1, per_page=10):
+        """
+        Paginate query results
+        
+        Args:
+            query: Query to paginate
+            page: Page number
+            per_page: Items per page
+            
+        Returns:
+            Dict with pagination info and results
+        """
+        async with self.get_session() as session:
+            total = await self.count(query)
+            
+            offset = (page - 1) * per_page
+            items = await session.scalars(
+                query.offset(offset).limit(per_page)
+            )
+            
+            return {
+                'items': list(items),
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': (total + per_page - 1) // per_page
+            }
 
-# יצירת אובייקט מסד נתונים גלובלי
+# Create a database instance
 db = Database() 

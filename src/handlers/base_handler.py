@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
 from dataclasses import dataclass
 
+from src.models.responses import HandlerResponse
+
 @dataclass
 class HandlerResponse:
     """מחלקה המייצגת תשובה מה-handler."""

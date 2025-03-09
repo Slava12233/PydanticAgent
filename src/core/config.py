@@ -25,7 +25,7 @@ POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "SSll456456!!")
 
 # URL מלא למסד הנתונים
-DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 
 # הגדרות Logfire
 LOGFIRE_API_KEY = os.getenv("LOGFIRE_API_KEY")
@@ -68,4 +68,4 @@ ADMIN_COMMANDS = [
     ("admin_models", "ניהול מודלים (שינוי ברירות מחדל, הגבלות)"),
     ("admin_config", "ניהול הגדרות מערכת"),
     ("admin_notify", "שליחת התראות למשתמשים")
-]
+] 

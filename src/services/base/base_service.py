@@ -4,30 +4,7 @@
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 
-class ServiceResponse:
-    """
-    מחלקה המייצגת תשובה משירות
-    """
-    def __init__(
-        self,
-        success: bool,
-        message: str,
-        data: Optional[Dict[str, Any]] = None,
-        error_details: Optional[str] = None
-    ):
-        """
-        אתחול תשובת שירות
-        
-        Args:
-            success: האם הפעולה הצליחה
-            message: הודעה למשתמש
-            data: נתונים נוספים (אופציונלי)
-            error_details: פרטי שגיאה (אופציונלי)
-        """
-        self.success = success
-        self.message = message
-        self.data = data or {}
-        self.error_details = error_details
+from src.models.responses import ServiceResponse
 
 class BaseService(ABC):
     """
