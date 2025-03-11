@@ -26,14 +26,14 @@ from src.models.database import (
 )
 from src.services.database.users import UserManager
 from src.utils.logger import setup_logger
-from src.ui.telegram.utils.telegram_bot_utils import (
-    format_price,
-    format_date,
-    format_number,
+from src.ui.telegram.utils.utils import (
     format_success_message,
     format_error_message,
-    format_warning_message,
-    format_info_message
+    format_info_message,
+    format_date,
+    format_number,
+    format_price,
+    format_warning_message
 )
 
 # Configure logging
@@ -192,7 +192,7 @@ class TelegramBotAnalytics:
                 # קבלת החנות של המשתמש
                 store = await session.scalar(
                     db.select(Store)
-                    .where(Store.owner_id == user_id)
+                    .where(Store.user_id == user_id)
                 )
                 
                 if not store:
@@ -350,7 +350,7 @@ class TelegramBotAnalytics:
                 # קבלת החנות של המשתמש
                 store = await session.scalar(
                     db.select(Store)
-                    .where(Store.owner_id == user_id)
+                    .where(Store.user_id == user_id)
                 )
                 
                 if not store:
@@ -488,7 +488,7 @@ class TelegramBotAnalytics:
                 # קבלת החנות של המשתמש
                 store = await session.scalar(
                     db.select(Store)
-                    .where(Store.owner_id == user_id)
+                    .where(Store.user_id == user_id)
                 )
                 
                 if not store:

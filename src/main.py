@@ -8,7 +8,7 @@ import signal
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 # יבוא הגדרות מקובץ config
-from src.core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT, LOGFIRE_DATASET
+from .core.config import LOGFIRE_API_KEY, LOGFIRE_PROJECT, LOGFIRE_DATASET
 
 # Configure logging
 logging.basicConfig(
@@ -41,9 +41,9 @@ except Exception as e:
     logger.warning(f"Logfire initialization failed: {e}. Continuing without Logfire.")
 
 # Import the TelegramBot class
-from src.ui.telegram.core.telegram_bot_core import TelegramBot
+from .ui.telegram.core.core import TelegramBot
 # Import the new database module
-from src.database.database import db
+from .database.core import db
 
 # משתנה גלובלי לשמירת הבוט
 bot = None

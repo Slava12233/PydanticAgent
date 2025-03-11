@@ -19,11 +19,12 @@ from src.models.database import (
 )
 from src.services.database.users import UserManager
 from src.utils.logger import setup_logger
-from src.ui.telegram.utils.telegram_bot_utils import (
+from src.ui.telegram.utils.utils import (
     format_success_message,
     format_error_message,
     format_warning_message,
-    format_info_message
+    format_info_message,
+    escape_markdown_v2
 )
 
 # הגדרת לוגר
@@ -127,7 +128,7 @@ class TelegramBotSettings:
         await update.message.reply_text(
             "⚙️ *הגדרות*\n\n"
             "בחר את ההגדרה שברצונך לשנות:",
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
@@ -156,7 +157,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "🌐 *בחירת שפה*\n\n"
                 "בחר את השפה הרצויה:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_LANGUAGE
@@ -176,7 +177,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "🕒 *בחירת אזור זמן*\n\n"
                 "בחר את אזור הזמן הרצוי:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_TIMEZONE
@@ -196,7 +197,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "💰 *בחירת מטבע*\n\n"
                 "בחר את המטבע הרצוי:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_CURRENCY
@@ -216,7 +217,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "🎨 *בחירת עיצוב*\n\n"
                 "בחר את העיצוב הרצוי:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_THEME
@@ -236,7 +237,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "🔒 *הגדרות פרטיות*\n\n"
                 "בחר את רמת הפרטיות הרצויה:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_PRIVACY
@@ -256,7 +257,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "🔔 *הגדרות התראות*\n\n"
                 "בחר את סוג ההתראות הרצוי:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_NOTIFICATIONS
@@ -265,7 +266,7 @@ class TelegramBotSettings:
             await query.edit_message_text(
                 "🔑 *הגדרת מפתחות API*\n\n"
                 "הזן את מפתח ה-API החדש:",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             return WAITING_FOR_API_KEY
             
@@ -294,7 +295,7 @@ class TelegramBotSettings:
                     
                     await query.edit_message_text(
                         format_success_message("השפה עודכנה בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await query.edit_message_text(
@@ -302,14 +303,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating language: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בעדכון השפה."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -336,7 +337,7 @@ class TelegramBotSettings:
                     
                     await query.edit_message_text(
                         format_success_message("אזור הזמן עודכן בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await query.edit_message_text(
@@ -344,14 +345,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating timezone: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בעדכון אזור הזמן."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -378,7 +379,7 @@ class TelegramBotSettings:
                     
                     await query.edit_message_text(
                         format_success_message("המטבע עודכן בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await query.edit_message_text(
@@ -386,14 +387,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating currency: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בעדכון המטבע."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -420,7 +421,7 @@ class TelegramBotSettings:
                     
                     await query.edit_message_text(
                         format_success_message("העיצוב עודכן בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await query.edit_message_text(
@@ -428,14 +429,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating theme: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בעדכון העיצוב."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -462,7 +463,7 @@ class TelegramBotSettings:
                     
                     await query.edit_message_text(
                         format_success_message("הגדרות הפרטיות עודכנו בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await query.edit_message_text(
@@ -470,14 +471,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating privacy settings: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בעדכון הגדרות הפרטיות."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -504,7 +505,7 @@ class TelegramBotSettings:
                     
                     await query.edit_message_text(
                         format_success_message("הגדרות ההתראות עודכנו בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await query.edit_message_text(
@@ -512,14 +513,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating notification settings: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בעדכון הגדרות ההתראות."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -543,7 +544,7 @@ class TelegramBotSettings:
                     
                     await update.message.reply_text(
                         format_success_message("מפתח ה-API עודכן בהצלחה!"),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 else:
                     await update.message.reply_text(
@@ -551,14 +552,14 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
         except Exception as e:
             logger.error(f"Error updating API key: {e}")
             await update.message.reply_text(
                 format_error_message("אירעה שגיאה בעדכון מפתח ה-API."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -582,7 +583,7 @@ class TelegramBotSettings:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                     return ConversationHandler.END
                 
@@ -613,7 +614,7 @@ class TelegramBotSettings:
                     "💾 *גיבוי הגדרות*\n\n"
                     "הגיבוי נוצר בהצלחה!\n"
                     "מה תרצה לעשות?",
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 
@@ -621,7 +622,7 @@ class TelegramBotSettings:
             logger.error(f"Error creating backup: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה ביצירת הגיבוי."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return WAITING_FOR_SETTINGS_ACTION 

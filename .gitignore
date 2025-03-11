@@ -37,7 +37,7 @@ pg_data/
 postgres_data/
 
 # Environment variables
-.env
+# .env
 
 # Project specific
 GitResurces/
@@ -101,5 +101,3 @@ token.txt
 
 # Backup
 .backup/
-
-

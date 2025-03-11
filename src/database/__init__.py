@@ -1,5 +1,5 @@
 """
-Database module
+מודול מסד הנתונים
 """
 
 class LazyLoader:
@@ -10,14 +10,17 @@ class LazyLoader:
     @property
     def db(self):
         if self._db is None:
-            from .database import db
-            self._db = db
+            from .database_manager import DatabaseManager
+            self._db = DatabaseManager()
         return self._db
     
     @property
     def models(self):
         if self._models is None:
-            from src.models.database import Base, User, Conversation, Message, Document, DocumentChunk
+            from .models.base import Base
+            from .models.users import User
+            from .models.conversations import Conversation, Message
+            from .models.documents import Document, DocumentChunk
             self._models = (Base, User, Conversation, Message, Document, DocumentChunk)
         return self._models
 

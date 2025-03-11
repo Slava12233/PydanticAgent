@@ -21,7 +21,7 @@ from src.models.database import (
 )
 from src.services.database.users import UserManager
 from src.utils.logger import setup_logger
-from src.ui.telegram.utils.telegram_bot_utils import (
+from src.ui.telegram.utils.utils import (
     format_success_message,
     format_error_message,
     format_warning_message,

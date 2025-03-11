@@ -22,7 +22,7 @@ from src.models.database import (
 from src.services.database.users import UserManager
 from src.core.config import ADMIN_USER_ID, ADMIN_COMMANDS
 from src.utils.logger import setup_logger
-from src.ui.telegram.utils.telegram_bot_utils import (
+from src.ui.telegram.utils.utils import (
     format_price,
     format_date,
     format_number,

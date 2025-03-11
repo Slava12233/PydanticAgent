@@ -29,11 +29,13 @@ from src.models.database import (
 )
 from src.services.database.users import UserManager
 from src.utils.logger import setup_logger
-from src.ui.telegram.utils.telegram_bot_utils import (
+from src.ui.telegram.utils.utils import (
     format_success_message,
     format_error_message,
     format_warning_message,
-    format_info_message
+    format_info_message,
+    format_date,
+    escape_markdown_v2
 )
 
 # הגדרת לוגר
@@ -119,7 +121,7 @@ class TelegramBotScheduler:
         await update.message.reply_text(
             "⏰ *מתזמן משימות*\n\n"
             "מה תרצה לעשות?",
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
@@ -152,7 +154,7 @@ class TelegramBotScheduler:
             await query.edit_message_text(
                 "📋 *יצירת משימה חדשה*\n\n"
                 "בחר את סוג המשימה:",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return WAITING_FOR_TASK_TYPE
@@ -177,7 +179,7 @@ class TelegramBotScheduler:
         await query.edit_message_text(
             f"📝 *הגדרת משימת {task_type}*\n\n"
             "הזן שם למשימה:",
-            parse_mode=ParseMode.MARKDOWN
+            parse_mode=ParseMode.MARKDOWN_V2
         )
         
         return WAITING_FOR_TASK_NAME
@@ -204,7 +206,7 @@ class TelegramBotScheduler:
         await update.message.reply_text(
             "⏰ *תזמון משימה*\n\n"
             "בחר את תדירות המשימה:",
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
@@ -225,42 +227,42 @@ class TelegramBotScheduler:
             await query.edit_message_text(
                 "📊 *הגדרת דוח יומי*\n\n"
                 "הזן את סוגי הנתונים שברצונך לכלול בדוח (מופרדים בפסיקים):",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             
         elif task_type == "weekly_report":
             await query.edit_message_text(
                 "📈 *הגדרת דוח שבועי*\n\n"
                 "הזן את סוגי הנתונים שברצונך לכלול בדוח (מופרדים בפסיקים):",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             
         elif task_type == "backup_data":
             await query.edit_message_text(
                 "💾 *הגדרת גיבוי נתונים*\n\n"
                 "הזן את נתיב התיקייה לגיבוי:",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             
         elif task_type == "system_cleanup":
             await query.edit_message_text(
                 "🧹 *הגדרת ניקוי מערכת*\n\n"
                 "הזן את סוגי הנתונים למחיקה (מופרדים בפסיקים):",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             
         elif task_type == "reminder":
             await query.edit_message_text(
                 "🔔 *הגדרת תזכורת*\n\n"
                 "הזן את תוכן התזכורת:",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             
         elif task_type == "custom_task":
             await query.edit_message_text(
                 "⚙️ *הגדרת משימה מותאמת*\n\n"
                 "הזן את הפרמטרים למשימה (בפורמט JSON):",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return WAITING_FOR_TASK_PARAMS
@@ -282,7 +284,7 @@ class TelegramBotScheduler:
             f"*תזמון:* {schedule}\n"
             f"*פרמטרים:* {params}\n\n"
             "האם לאשר את המשימה?",
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("אשר", callback_data="confirm"),
@@ -340,19 +342,19 @@ class TelegramBotScheduler:
                             "המשימה נוצרה בהצלחה!\n"
                             f"תזמון: {task_data['schedule']}"
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                     
             except Exception as e:
                 logger.error(f"Error creating task: {e}")
                 await query.edit_message_text(
                     format_error_message("אירעה שגיאה ביצירת המשימה."),
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.MARKDOWN_V2
                 )
         else:
             await query.edit_message_text(
                 format_info_message("יצירת המשימה בוטלה."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return ConversationHandler.END
@@ -379,7 +381,7 @@ class TelegramBotScheduler:
                 if not tasks:
                     await query.edit_message_text(
                         format_info_message("אין משימות פעילות כרגע."),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                     return ConversationHandler.END
                 
@@ -405,7 +407,7 @@ class TelegramBotScheduler:
                 
                 await query.edit_message_text(
                     message,
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 
@@ -413,7 +415,7 @@ class TelegramBotScheduler:
             logger.error(f"Error showing active tasks: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בטעינת המשימות הפעילות."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return WAITING_FOR_SCHEDULER_ACTION
@@ -437,7 +439,7 @@ class TelegramBotScheduler:
                             "לא נמצא משתמש מחובר.\n"
                             "אנא התחבר מחדש בעזרת הפקודה /start."
                         ),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                     return ConversationHandler.END
                 
@@ -468,7 +470,7 @@ class TelegramBotScheduler:
                 await query.edit_message_text(
                     "⚙️ *הגדרות מתזמן*\n\n"
                     "לחץ על כפתור כדי להפעיל/לכבות:",
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 
@@ -476,7 +478,7 @@ class TelegramBotScheduler:
             logger.error(f"Error showing scheduler settings: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בטעינת הגדרות המתזמן."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return WAITING_FOR_SCHEDULER_ACTION
@@ -504,7 +506,7 @@ class TelegramBotScheduler:
                 if not tasks:
                     await query.edit_message_text(
                         format_info_message("אין היסטוריית משימות."),
-                        parse_mode=ParseMode.MARKDOWN
+                        parse_mode=ParseMode.MARKDOWN_V2
                     )
                     return ConversationHandler.END
                 
@@ -530,7 +532,7 @@ class TelegramBotScheduler:
                 
                 await query.edit_message_text(
                     message,
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 
@@ -538,7 +540,7 @@ class TelegramBotScheduler:
             logger.error(f"Error showing task history: {e}")
             await query.edit_message_text(
                 format_error_message("אירעה שגיאה בטעינת היסטוריית המשימות."),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN_V2
             )
         
         return WAITING_FOR_SCHEDULER_ACTION

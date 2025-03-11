@@ -1,0 +1,100 @@
+# Instructions
+
+During your interaction with the user, if you find anything reusable in this project (e.g. version of a library, model name), especially about a fix to a mistake you made or a correction you received, you should take note in the `Lessons` section in the `.cursorrules` file so you will not make the same mistake again. 
+
+You should also use the `.cursorrules` file as a Scratchpad to organize your thoughts. Especially when you receive a new task, you should first review the content of the Scratchpad, clear old different task if necessary, first explain the task, and plan the steps you need to take to complete the task. You can use todo markers to indicate the progress, e.g.
+[X] Task 1
+[ ] Task 2
+
+Also update the progress of the task in the Scratchpad when you finish a subtask.
+Especially when you finished a milestone, it will help to improve your depth of task accomplishment to use the Scratchpad to reflect and plan.
+The goal is to help you maintain a big picture as well as the progress of the task. Always refer to the Scratchpad when you plan the next step.
+
+
+# Lessons
+
+## User Specified Lessons
+
+- You have a python venv in ./venv. Use it.
+- Include info useful for debugging in the program output.
+- Read the file before you try to edit it.
+- Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. 
+- When integrating Logfire with httpx, you need to install the additional package `logfire[httpx]` to enable HTTP request monitoring.
+- Always call `logfire.configure()` before using any other Logfire functions.
+- Use `logfire.span()` for tracking longer operations and `logfire.info()`, `logfire.error()` for specific events.
+- Remember to add proper cleanup with `logfire.force_flush()` and `logfire.shutdown()` to ensure all logs are sent.
+- For multilingual documentation, include both Hebrew and English versions in the README.md file to make the project accessible to a wider audience.
+- Maintain a modular architecture by separating concerns into different files (e.g., agent.py for AI logic, main.py for bot interface).
+- When configuring timeouts in python-telegram-bot, use the defaults parameter in Application.builder() instead of trying to modify the _request.timeout attribute directly. The timeout is a tuple, not a single value.
+- In python-telegram-bot v21.10, use a single 'timeout' key in the defaults dictionary instead of separate timeout types like 'connect_timeout', 'read_timeout', etc.
+- In python-telegram-bot v21.10, use the Defaults class instead of a dictionary for the defaults parameter, and make sure to include tzinfo (e.g., datetime.timezone.utc).
+- In python-telegram-bot v21.10, the Defaults class does not accept any timeout parameters. Timeouts must be configured elsewhere, not in the Defaults object.
+- In python-telegram-bot v21.10, use the ApplicationBuilder methods (read_timeout, write_timeout, connect_timeout, pool_timeout) to set timeout values instead of trying to set them in the Defaults object.
+- When migrating from SQLite to PostgreSQL, use SQLAlchemy as an ORM to make the transition smoother and maintain a consistent API.
+- For PostgreSQL connections, install both `psycopg2-binary` and `sqlalchemy` packages.
+- Use environment variables to store database connection details (host, port, database name, username, password) for better security and flexibility.
+- When working with SQLAlchemy, define models that inherit from `declarative_base()` to create database tables.
+- In SQLAlchemy, use `sessionmaker` to create database sessions for interacting with the database.
+- Remember to call `db.init_db()` before using the database to ensure tables are created and the connection is established.
+- When accessing an object's attributes after a database session is closed, you'll get a DetachedInstanceError. Save any needed values before closing the session.
+- After migrating from SQLite to PostgreSQL, make sure to remove all references to the old database file and code to avoid confusion.
+- When implementing a RAG system, create a separate module for document management to keep the code organized.
+- For RAG systems, use a database model that can store document chunks with metadata for efficient retrieval.
+- Implement a command-line interface for document management to allow for easy testing and administration.
+- When adding documents to a RAG system, split them into smaller chunks for more precise retrieval.
+- Include proper error handling in document management functions to prevent crashes when dealing with file operations.
+- Make sure to update the README.md with detailed instructions on how to use the RAG system, both via the bot and command line.
+- When using SQLAlchemy, always use text() for raw SQL queries to avoid the "Textual SQL expression should be explicitly declared as text()" error.
+- When using pgvector in PostgreSQL, make sure the extension is installed in the database. If not, use ARRAY(Float) as a temporary alternative for storing embeddings.
+- When testing database functionality, verify that the tables exist and have the correct structure before running more complex tests. This helps identify schema issues early.
+- For Telegram user IDs, use BigInteger instead of Integer in SQLAlchemy models, as Telegram IDs can be very large numbers that exceed the range of a standard 32-bit integer.
+- When implementing search functionality in a RAG system, set a min_similarity parameter (e.g., 0.0) to ensure results are returned even when the similarity score is low.
+- Provide clear and detailed feedback to users when they interact with document management features, including emojis and formatting for better readability.
+- Validate user input for document titles and content to prevent issues with empty or oversized files.
+- The agent should proactively help users navigate the system, not expect users to know all the commands or exact syntax.
+- When implementing task type identification, include a wide range of natural language expressions and variations to handle different ways users might phrase their requests.
+- For task type identification, include both formal and informal language patterns, as users often use casual language in chat interfaces.
+- When adding keywords for task identification, consider adding complete phrases and not just individual words to improve accuracy.
+- For better task identification, assign higher scores to longer, more specific phrases that match user queries.
+- When testing task identification, create a comprehensive test suite with various phrasings to ensure the system handles different ways of expressing the same intent.
+- When dealing with Hebrew text in console output, use proper encoding settings (UTF-8) to avoid character display issues.
+- For testing functionality with Hebrew text, consider writing results to files instead of relying solely on console output, which may have encoding limitations.
+- When implementing product creation from natural language, ensure the extraction of product data is robust and can handle various ways users might describe products.
+- For WooCommerce integration, use a caching mechanism to improve performance and reduce API calls, especially for read operations.
+- When implementing caching for WooCommerce API, make sure to invalidate the cache after write operations (POST, PUT, DELETE) to ensure data consistency.
+- For product management, provide clear feedback to users about the status of their operations, including success messages and error details when applicable.
+- כאשר עובדים עם תאריכים בפייתון ומבצעים מניפולציות על חודשים, יש לטפל בכל המקרים האפשריים (במיוחד כאשר החודש הוא 1 או 12) כדי למנוע שגיאות כמו `ValueError: month must be in 1..12`. למשל, כאשר מחשבים תאריך לפני שנה, יש לטפל בנפרד במקרה שהחודש הוא 12 (יש לחזור לחודש 1 של השנה הקודמת) ובמקרה שהחודש הוא בין 1 ל-11 (יש לחזור לחודש הבא של השנה הקודמת).
+
+## cursor learned
+
+- For search results, ensure proper handling of different character encodings (UTF-8) for international queries
+- Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
+- When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
+- Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
+- The project uses Pydantic AI as the main framework for AI integration, which provides a clean interface for working with LLMs
+- The Telegram bot is implemented using python-telegram-bot library and supports Hebrew language
+- PostgreSQL is used for storing chat history with SQLAlchemy as the ORM
+- Logfire provides comprehensive monitoring for AI applications, tracking HTTP requests, database operations, and model interactions
+- When working with Telegram bots, increase timeout values to prevent "Timed out" errors during API calls
+- Use a modular architecture with separate files for bot logic, agent implementation, and main application flow
+- For RAG systems, create a dedicated tools directory to house utility functions like document management
+- When implementing a RAG system, update the configuration file to include new commands for document operations
+- Store document chunks in the database with metadata to enable efficient retrieval during conversations
+- Implement both bot commands and command-line interfaces for document management to provide flexibility
+- For WooCommerce integration, use a caching mechanism to improve performance and reduce API calls
+- When implementing caching, ensure cache invalidation occurs when data is modified (POST, PUT, DELETE requests)
+- Test caching performance by comparing execution times with and without caching enabled
+- When testing functionality with Hebrew text in Windows PowerShell, be aware of potential encoding issues that may cause display problems
+- The product management system includes robust extraction of product data from natural language text
+- The system uses a comprehensive approach to format product displays with emojis and clear structure for better user experience
+- When using context management in a Telegram bot, make sure to use the correct method names from the context service
+- When fixing bugs in method calls, always check the actual method signatures in the source code
+- For context retrieval, use _get_relevant_memories (with underscore) as it's the correct private method name
+- When calling model_manager.get_response(), use 'message' and 'context' parameters instead of 'query' and 'conversation_history'
+- After migrating from SQLite to PostgreSQL, remove old database files like database.db to avoid confusion
+- In Telegram bot implementations, ensure proper Hebrew support throughout the conversation flow
+
+
+# Scratchpad
+
+
